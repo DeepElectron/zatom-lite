@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://files.rcsb.org ws://127.0.0.1:* ws://localhost:*; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'" />
+    <meta name="application-name" content="Zatom" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/src/assets/zatom-favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="180x180" href="/src/assets/zatom-mark-180.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/src/assets/zatom-mark-180.png" />
+    <title>zatom — atomistic modeling</title>
+    <style>
+      html, body, #root { height: 100%; margin: 0; }
+      body { overflow: hidden; }
+      .zatom-preboot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: #18181b;
+        background: #ffffff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      html.dark .zatom-preboot { color: #ededf0; background: #06080a; }
+      .zatom-preboot img { width: clamp(76px, 9vw, 104px); height: clamp(76px, 9vw, 104px); object-fit: contain; }
+      .zatom-preboot span { position: absolute; bottom: max(16px, env(safe-area-inset-bottom)); font-size: 10px; opacity: .58; }
+    </style>
+    <!--
+      Interface appearance is applied before first paint. Auto begins with the
+      original white VESTA background, then ModelerView derives its palette from
+      the active Shader. System follows the operating-system scheme; Light/Dark
+      restore explicit overrides. The html class is derived rather than hardcoded
+      so CSS and the Zustand store cannot disagree.
+    -->
+    <script src="/theme-bootstrap.js"></script>
+  </head>
+  <body>
+    <div id="root">
+      <div class="zatom-preboot" role="status" aria-label="Opening Zatom">
+        <img src="/src/assets/zatom-mark-180.png" alt="" draggable="false" />
+        <span>Copyright © 2026 zauq tech</span>
+      </div>
+    </div>
+    <script type="module" src="/src/app/main.tsx"></script>
+  </body>
+</html>

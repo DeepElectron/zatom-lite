@@ -1,0 +1,10 @@
+# Environment variables and local runtime state
+.env*.local
+*.local
+.zatom/
+
+# Dependencies and build outputs
+node_modules/
+dist/
+.vite/
+.DS_Store

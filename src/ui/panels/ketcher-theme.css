@@ -1,0 +1,106 @@
+/*
+ * Ketcher 3.x hard-codes UI colors in Emotion and CSS Modules, so dark mode uses
+ * stable module-name substrings scoped to .dark .ketcher-host. The molecular SVG
+ * is inverted separately to keep bonds legible while preserving heteroatom hues.
+ */
+.ketcher-host {
+  background: #ffffff;
+}
+.dark .ketcher-host {
+  background: #1b1b1f;
+}
+
+/* Main editor shell. */
+.dark .ketcher-host [class*="Editor-module_editor"] {
+  background-color: #1e1e22 !important;
+  color: #e4e4e7 !important;
+}
+
+/* Top toolbar has a stable data-testid rather than a module class. */
+.dark .ketcher-host [data-testid="top-toolbar"] {
+  background-color: #1e1e22 !important;
+  border-color: #34343a !important;
+  color: #e4e4e7 !important;
+}
+.dark .ketcher-host [data-testid="top-toolbar"] button {
+  color: #e4e4e7 !important;
+}
+.dark .ketcher-host [data-testid="top-toolbar"] svg {
+  fill: #c4c4c8 !important;
+}
+.dark .ketcher-host [data-testid="top-toolbar"] [class*="divider"],
+.dark .ketcher-host [data-testid="top-toolbar"] hr {
+  background-color: #34343a !important;
+  border-color: #34343a !important;
+}
+
+/* Toolbar overflow control. */
+.dark .ketcher-host [class*="ArrowScroll-module_scroll"] {
+  background-color: #26262b !important;
+  color: #c4c4c8 !important;
+}
+.dark .ketcher-host [class*="ArrowScroll-module_scroll"] svg {
+  fill: #c4c4c8 !important;
+}
+
+/* Left and bottom tool groups. */
+.dark .ketcher-host [class*="LeftToolbar-module_root"],
+.dark .ketcher-host [class*="LeftToolbar-module_buttons"],
+.dark .ketcher-host [class*="LeftToolbar-module_group"],
+.dark .ketcher-host [class*="LeftToolbar-module_groupItem"],
+.dark .ketcher-host [class*="BottomToolbar-module_root"],
+.dark .ketcher-host [class*="BottomToolbar-module_group"] {
+  background-color: #26262b !important;
+  border-color: #34343a !important;
+}
+
+/* Tool buttons and their selected state. */
+.dark .ketcher-host [class*="ActionButton-module_button"],
+.dark .ketcher-host [class*="LeftToolbar-module_button"],
+.dark .ketcher-host [class*="BottomToolbar-module_button"] {
+  color: #e4e4e7 !important;
+}
+.dark .ketcher-host [class*="ActionButton-module_selected"],
+.dark .ketcher-host [class*="ToolbarMultiToolItem-module_iconSelected"] {
+  background-color: #2e858f !important;
+}
+
+/* Limit SVG recoloring to toolbar icons, never the molecular canvas. */
+.dark .ketcher-host [class*="ToolbarMultiToolItem-module_icon"],
+.dark .ketcher-host [class*="ActionButton-module_button"] svg,
+.dark .ketcher-host [class*="LeftToolbar-module"] svg,
+.dark .ketcher-host [class*="BottomToolbar-module"] svg {
+  fill: #c4c4c8 !important;
+}
+.dark .ketcher-host [class*="ToolbarMultiToolItem-module_root"]:active [class*="-module_icon"] {
+  fill: #ffffff !important;
+}
+
+.dark .ketcher-host [class*="Toolbar-module_root"] kbd {
+  color: #8b8b93 !important;
+}
+.dark .ketcher-host [class*="Editor-module_editor"] hr {
+  border-color: #34343a !important;
+}
+
+/* Dark canvas with luminance inversion; hue rotation restores element colors. */
+.dark .ketcher-host [class*="StructEditor-module_canvas"],
+.dark .ketcher-host [class*="Editor-module_canvas"] {
+  background-color: #1e1e22 !important;
+}
+.dark .ketcher-host [class*="StructEditor-module_canvas"] svg {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Raised element palette; Emotion continues to own per-element text colors. */
+.dark .ketcher-host [class*="RightToolbar-module_root"],
+.dark .ketcher-host [class*="RightToolbar-module_buttons"],
+.dark .ketcher-host [class*="RightToolbar-module_group"],
+.dark .ketcher-host [class*="RightToolbar-module_groupItem"],
+.dark .ketcher-host [class*="RightToolbar-module_atomsList"] {
+  background-color: #2a2a30 !important;
+  border-color: #34343a !important;
+}
+.dark .ketcher-host [class*="RightToolbar-module_root"] hr {
+  border-color: #34343a !important;
+}

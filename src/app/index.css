@@ -1,0 +1,1793 @@
+/* Zatom's design tokens, base styles, workspace theme, motion, and controls.
+ * Tailwind v4 requires semantic tokens in @theme inline before it can emit the
+ * corresponding color and surface utilities used by the workspace. */
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@keyframes zatom-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes zatom-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes zatom-dialog-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes zatom-dialog-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+}
+
+@keyframes zatom-menu-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes zatom-menu-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+
+.zatom-dialog-overlay[data-state='open'] { animation: zatom-fade-in 180ms ease-out; }
+.zatom-dialog-overlay[data-state='closed'] { animation: zatom-fade-out 140ms ease-in; }
+.zatom-dialog-content[data-state='open'] { animation: zatom-dialog-in 200ms ease-out; }
+.zatom-dialog-content[data-state='closed'] { animation: zatom-dialog-out 150ms ease-in; }
+.zatom-context-menu[data-state='open'] {
+  animation: zatom-menu-in 150ms ease-out;
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+}
+.zatom-context-menu[data-state='closed'] {
+  animation: zatom-menu-out 100ms ease-in;
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+}
+.zatom-hover-hint { animation: zatom-fade-in 150ms ease-out; }
+
+.zatom-brand-button {
+  color: var(--panel-text);
+  background: transparent;
+}
+
+.zatom-brand-button:hover,
+.zatom-brand-button:focus-visible {
+  background: var(--panel-elevated);
+}
+
+.zatom-brand-button:focus-visible {
+  outline: 2px solid var(--panel-border-focus);
+  outline-offset: 2px;
+}
+
+.zatom-brand-button[data-brand-coachmark="true"] {
+  animation: zatom-brand-coachmark 1.15s ease-out 2;
+}
+
+.zatom-brand-hint {
+  animation: zatom-brand-hint-in 180ms ease-out both;
+}
+
+@keyframes zatom-brand-coachmark {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  45% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--panel-accent) 20%, transparent); }
+}
+
+@keyframes zatom-brand-hint-in {
+  from { opacity: 0; transform: translateX(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zatom-dialog-overlay,
+  .zatom-dialog-content,
+  .zatom-context-menu,
+  .zatom-hover-hint,
+  .zatom-brand-button[data-brand-coachmark="true"],
+  .zatom-brand-hint {
+    animation: none;
+  }
+}
+
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Panel scrollbar */
+  --panel-scroll-track: #f1f5f9;
+  --panel-scroll-thumb: #cbd5e1;
+  --panel-scroll-thumb-hover: #94a3b8;
+  /* Overlay scrollbars are visual-only and never consume layout width. */
+  --scroll-overlay-size: 6px;
+  --grid-dot-color: #d4d4d4;
+  --canvas-bg: #fafafa;
+  --viewport-background: #ffffff;
+
+  /* shadcn/ui design tokens - warm neutral palette */
+  --background: oklch(0.98 0.002 60);
+  --foreground: oklch(0.25 0.01 30);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.25 0.01 30);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.25 0.01 30);
+  --primary: oklch(0.35 0.02 30);
+  --primary-foreground: oklch(0.98 0.002 60);
+  --secondary: oklch(0.95 0.002 60);
+  --secondary-foreground: oklch(0.25 0.01 30);
+  --muted: oklch(0.96 0.002 60);
+  --muted-foreground: oklch(0.55 0.01 30);
+  --accent: oklch(0.94 0.003 60);
+  --accent-foreground: oklch(0.25 0.01 30);
+  --destructive: oklch(0.5 0.18 25);
+  --destructive-foreground: oklch(0.98 0.002 60);
+  --border: oklch(0.9 0.002 60);
+  --input: oklch(0.9 0.002 60);
+  --ring: oklch(0.35 0.02 30);
+  --chart-1: oklch(0.45 0.08 240);
+  --chart-2: oklch(0.55 0.08 180);
+  --chart-3: oklch(0.6 0.08 150);
+  --chart-4: oklch(0.5 0.08 270);
+  --chart-5: oklch(0.55 0.08 320);
+  --radius: 0.75rem;
+  --sidebar: oklch(0.99 0.001 60);
+  --sidebar-foreground: oklch(0.25 0.01 30);
+  --sidebar-primary: oklch(0.35 0.02 30);
+  --sidebar-primary-foreground: oklch(0.98 0.002 60);
+  --sidebar-accent: oklch(0.96 0.002 60);
+  --sidebar-accent-foreground: oklch(0.25 0.01 30);
+  --sidebar-border: oklch(0.92 0.002 60);
+  --sidebar-ring: oklch(0.35 0.02 30);
+
+  /* App-wide light panel tokens. */
+  --panel-bg: #ffffff;
+  --panel-elevated: #f4f4f5;
+  --panel-hover: #e4e4e7;
+  --panel-border: #e4e4e7;
+  --panel-border-focus: #d4d4d8;
+  --panel-text: #18181b;
+  --panel-text-secondary: #52525b;
+  --panel-text-tertiary: #71717a;
+  --panel-accent: #2563eb;
+  --panel-accent-bg: rgba(37, 99, 235, 0.08);
+  --panel-accent-border: rgba(37, 99, 235, 0.25);
+  --panel-radius: 14px;
+  --control-selected-bg: #edf1f5;
+  --control-selected-border: #cbd5df;
+  --control-selected-text: #294d70;
+  --control-primary-bg: #315f8e;
+  --control-primary-hover: #294f77;
+  --control-primary-text: #f8fafc;
+  --glass-bg: #f7f7f5;
+  --glass-bg-hover: #efefed;
+  --glass-bg-active: #e8e8e5;
+  --glass-bg-subtle: #fbfbfa;
+  --glass-border: rgba(24, 24, 27, 0.1);
+  --glass-border-subtle: rgba(24, 24, 27, 0.06);
+  --glass-blur: blur(28px) saturate(140%);
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  --border-primary: var(--panel-border);
+
+  /* Low-saturation badge palette for light panels. */
+  --badge-0: #c2c5d0;
+  --badge-1: #bcc8e4;
+  --badge-2: #b6d6c6;
+  --badge-3: #ddcd98;
+  --badge-4: #e3bcab;
+  --badge-5: #ccc0e2;
+  --badge-6: #b2cfde;
+  --badge-7: #dcb9cb;
+  --badge-fg: #3f4654;
+}
+
+.dark {
+  --panel-scroll-track: #1D1D20;
+  --panel-scroll-thumb: #27272A;
+  --panel-scroll-thumb-hover: #44403C;
+  /* Neutral grid marks keep the near-black canvas free of a blue cast. */
+  --grid-dot-color: rgba(255, 255, 255, 0.08);
+  --canvas-bg: #06080A;
+  --background: #06080A;
+  --foreground: #EDEDEF;
+  --card: #1D1D20;
+  --card-foreground: #EDEDEF;
+  --popover: #1D1D20;
+  --popover-foreground: #EDEDEF;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #121214;
+  --secondary-foreground: #EDEDEF;
+  --muted: #121214;
+  --muted-foreground: #8B8B93;
+  --accent: #1D1D20;
+  --accent-foreground: #EDEDEF;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #27272A;
+  --input: #27272A;
+  --ring: #3b82f6;
+  --chart-1: oklch(0.55 0.12 240);
+  --chart-2: oklch(0.6 0.12 180);
+  --chart-3: oklch(0.65 0.12 150);
+  --chart-4: oklch(0.6 0.12 270);
+  --chart-5: oklch(0.6 0.12 320);
+  --sidebar: oklch(0.16 0.01 30);
+  --sidebar-foreground: oklch(0.95 0.002 60);
+  --sidebar-primary: oklch(0.7 0.02 60);
+  --sidebar-primary-foreground: oklch(0.15 0.01 30);
+  --sidebar-accent: oklch(0.22 0.01 30);
+  --sidebar-accent-foreground: oklch(0.95 0.002 60);
+  --sidebar-border: oklch(0.25 0.01 30);
+  --sidebar-ring: oklch(0.7 0.02 60);
+
+  /* App-wide dark panel tokens. */
+  --panel-bg: #121214;
+  --panel-elevated: #1D1D20;
+  --panel-hover: #27272A;
+  --panel-border: #27272A;
+  --panel-border-focus: #3F3F46;
+  --panel-text: #EDEDEF;
+  --panel-text-secondary: #a1a1aa;
+  --panel-text-tertiary: #71717a;
+  --panel-accent: #0A84FF;
+  --panel-accent-bg: rgba(10, 132, 255, 0.12);
+  --panel-accent-border: rgba(10, 132, 255, 0.3);
+  --panel-radius: 14px;
+  --control-selected-bg: #252a30;
+  --control-selected-border: #3a4652;
+  --control-selected-text: #dce6ef;
+  --control-primary-bg: #3c6b98;
+  --control-primary-hover: #4778a7;
+  --control-primary-text: #f8fafc;
+  --glass-bg: rgba(18, 18, 20, 0.88);
+  --glass-bg-hover: rgba(39, 39, 42, 0.88);
+  --glass-bg-active: rgba(255, 255, 255, 0.1);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-border-subtle: rgba(255, 255, 255, 0.05);
+  --glass-blur: blur(48px);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-tertiary: rgba(255, 255, 255, 0.3);
+  --border-primary: var(--panel-border);
+
+  /* Low-saturation badge palette for dark panels. */
+  --badge-0: #4b4e57;
+  --badge-1: #4f5872;
+  --badge-2: #46665d;
+  --badge-3: #6b6245;
+  --badge-4: #6e5650;
+  --badge-5: #554e6b;
+  --badge-6: #46606b;
+  --badge-7: #6a505d;
+  --badge-fg: rgba(255, 255, 255, 0.9);
+}
+
+/* Auto uses the active Shader's original background as the single theme seed.
+   Surfaces keep that hue and gain hierarchy by moving only toward the readable
+   foreground. Because these tokens live on <html>, body-level portals and floating
+   tools receive the same palette as the docked modeler panels. */
+html[data-appearance="viewport"] {
+  --auto-theme-text: color-mix(in oklab, var(--viewport-background) 7%, #18181b 93%);
+  --auto-theme-text-secondary: color-mix(in oklab, var(--viewport-background) 25%, #18181b 75%);
+  --auto-theme-text-tertiary: color-mix(in oklab, var(--viewport-background) 36%, #18181b 64%);
+  --auto-theme-surface: color-mix(in oklab, var(--viewport-background) 96%, #18181b 4%);
+  --auto-theme-elevated: color-mix(in oklab, var(--viewport-background) 91%, #18181b 9%);
+  --auto-theme-hover: color-mix(in oklab, var(--viewport-background) 86%, #18181b 14%);
+  --auto-theme-active: color-mix(in oklab, var(--viewport-background) 82%, #18181b 18%);
+  --auto-theme-border: color-mix(in oklab, var(--viewport-background) 74%, #18181b 26%);
+  --auto-theme-border-focus: color-mix(in oklab, var(--viewport-background) 60%, #18181b 40%);
+  --auto-theme-status-success: #1f673d;
+  --auto-theme-status-warning: #70450d;
+  --auto-theme-status-error: #903832;
+  --auto-theme-status-neutral: #505967;
+}
+
+html.dark[data-appearance="viewport"] {
+  --auto-theme-text: color-mix(in oklab, var(--viewport-background) 7%, #ededf0 93%);
+  --auto-theme-text-secondary: color-mix(in oklab, var(--viewport-background) 24%, #ededf0 76%);
+  --auto-theme-text-tertiary: color-mix(in oklab, var(--viewport-background) 36%, #ededf0 64%);
+  --auto-theme-surface: color-mix(in oklab, var(--viewport-background) 93%, #ededf0 7%);
+  --auto-theme-elevated: color-mix(in oklab, var(--viewport-background) 87%, #ededf0 13%);
+  --auto-theme-hover: color-mix(in oklab, var(--viewport-background) 81%, #ededf0 19%);
+  --auto-theme-active: color-mix(in oklab, var(--viewport-background) 76%, #ededf0 24%);
+  --auto-theme-border: color-mix(in oklab, var(--viewport-background) 70%, #ededf0 30%);
+  --auto-theme-border-focus: color-mix(in oklab, var(--viewport-background) 56%, #ededf0 44%);
+  --auto-theme-status-success: #7bc494;
+  --auto-theme-status-warning: #d6a45f;
+  --auto-theme-status-error: #e78982;
+  --auto-theme-status-neutral: #a6adbb;
+}
+
+html[data-appearance="viewport"] {
+  --background: var(--viewport-background);
+  --foreground: var(--auto-theme-text);
+  --card: var(--auto-theme-surface);
+  --card-foreground: var(--auto-theme-text);
+  --popover: var(--auto-theme-elevated);
+  --popover-foreground: var(--auto-theme-text);
+  --primary: var(--auto-theme-text);
+  --primary-foreground: var(--viewport-background);
+  --secondary: var(--auto-theme-elevated);
+  --secondary-foreground: var(--auto-theme-text);
+  --muted: var(--auto-theme-surface);
+  --muted-foreground: var(--auto-theme-text-secondary);
+  --accent: var(--auto-theme-hover);
+  --accent-foreground: var(--auto-theme-text);
+  --border: var(--auto-theme-border);
+  --input: var(--auto-theme-border);
+  --ring: var(--auto-theme-text-secondary);
+  --sidebar: var(--auto-theme-surface);
+  --sidebar-foreground: var(--auto-theme-text);
+  --sidebar-primary: var(--auto-theme-text);
+  --sidebar-primary-foreground: var(--viewport-background);
+  --sidebar-accent: var(--auto-theme-elevated);
+  --sidebar-accent-foreground: var(--auto-theme-text);
+  --sidebar-border: var(--auto-theme-border);
+  --sidebar-ring: var(--auto-theme-text-secondary);
+  --panel-scroll-track: var(--auto-theme-elevated);
+  --panel-scroll-thumb: var(--auto-theme-active);
+  --panel-scroll-thumb-hover: var(--auto-theme-border-focus);
+  --grid-dot-color: color-mix(in srgb, var(--auto-theme-text) 10%, transparent);
+  --canvas-bg: var(--viewport-background);
+  --panel-bg: var(--auto-theme-surface);
+  --panel-elevated: var(--auto-theme-elevated);
+  --panel-hover: var(--auto-theme-hover);
+  --panel-border: var(--auto-theme-border);
+  --panel-border-focus: var(--auto-theme-border-focus);
+  --panel-text: var(--auto-theme-text);
+  --panel-text-secondary: var(--auto-theme-text-secondary);
+  --panel-text-tertiary: var(--auto-theme-text-tertiary);
+  --panel-accent: var(--auto-theme-text);
+  --panel-accent-bg: var(--auto-theme-elevated);
+  --panel-accent-border: var(--auto-theme-border-focus);
+  --control-selected-bg: var(--auto-theme-elevated);
+  --control-selected-border: var(--auto-theme-border-focus);
+  --control-selected-text: var(--auto-theme-text);
+  --control-primary-bg: var(--auto-theme-text);
+  --control-primary-hover: var(--auto-theme-primary-hover, var(--auto-theme-text));
+  --control-primary-text: var(--viewport-background);
+  --glass-bg: var(--auto-theme-surface);
+  --glass-bg-hover: var(--auto-theme-hover);
+  --glass-bg-active: var(--auto-theme-active);
+  --glass-bg-subtle: var(--auto-theme-elevated);
+  --glass-border: var(--auto-theme-border);
+  --glass-border-subtle: color-mix(in srgb, var(--auto-theme-text) 14%, transparent);
+  --glass-blur: blur(36px) saturate(145%);
+  --text-primary: var(--auto-theme-text);
+  --text-secondary: var(--auto-theme-text-secondary);
+  --text-tertiary: var(--auto-theme-text-tertiary);
+  --border-primary: var(--auto-theme-border);
+}
+
+@theme inline {
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html, body, #root {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+  }
+  body {
+    min-width: 320px;
+  }
+
+  /* Vertical text for collapsed panels */
+  .writing-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+
+  /* Tool cursor classes */
+  .cursor-delete {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ef4444' stroke-width='2'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/%3E%3Cpath d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/%3E%3C/svg%3E") 12 12, crosshair;
+  }
+  .cursor-workspace {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238b5cf6' stroke-width='2' stroke-dasharray='4'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3C/svg%3E") 12 12, crosshair;
+  }
+  .cursor-note {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='%23fbbf24' stroke='%23f59e0b' stroke-width='1'%3E%3Crect x='4' y='4' width='16' height='16' rx='2'/%3E%3Cpath d='M8 10h8' stroke='%23666'/%3E%3Cpath d='M8 14h6' stroke='%23666'/%3E%3C/svg%3E") 12 12, crosshair;
+  }
+  .cursor-brush {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2310b981' stroke-width='2'%3E%3Cpath d='M12 19l7-7 3 3-7 7-3-3z'/%3E%3Cpath d='M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z'/%3E%3Cpath d='M2 2l7.586 7.586'/%3E%3C/svg%3E") 2 22, crosshair;
+  }
+
+  /* Canvas dot pattern background */
+  .bg-dot-pattern {
+    background-image: radial-gradient(circle, oklch(0.85 0.002 60) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .dark .bg-dot-pattern {
+    background-image: radial-gradient(circle, oklch(0.35 0.01 30) 1px, transparent 1px);
+  }
+
+  /* Radial menu scale-in animation */
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .animate-scale-in {
+    animation: scale-in 0.3s ease-out;
+  }
+
+  /* Canvas prompt breathing animation */
+  @keyframes breathing {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+  .animate-breathing {
+    animation: breathing 3s ease-in-out infinite;
+  }
+
+  @keyframes focus-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.0),
+                  0 0 0 0 rgba(59, 130, 246, 0.0);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.45),
+                  0 0 0 14px rgba(59, 130, 246, 0.18);
+      transform: scale(1.025);
+    }
+  }
+  .animate-focus-pulse {
+    animation: focus-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes constellation-pulse {
+    0%, 100% {
+      box-shadow: 0 0 4px var(--pulse-color, #818cf8),
+                  0 0 8px color-mix(in srgb, var(--pulse-color, #818cf8) 40%, transparent);
+    }
+    50% {
+      box-shadow: 0 0 8px var(--pulse-color, #818cf8),
+                  0 0 20px color-mix(in srgb, var(--pulse-color, #818cf8) 60%, transparent),
+                  0 0 32px color-mix(in srgb, var(--pulse-color, #818cf8) 20%, transparent);
+    }
+  }
+  .animate-constellation-pulse {
+    animation: constellation-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes constellation-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .animate-constellation-spin {
+    position: relative;
+    overflow: visible;
+  }
+  .animate-constellation-spin::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    border: 2.5px solid transparent;
+    border-top-color: var(--pulse-color, #3b82f6);
+    border-right-color: color-mix(in srgb, var(--pulse-color, #3b82f6) 30%, transparent);
+    animation: constellation-spin 1.2s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes constellation-breathe {
+    0%, 100% {
+      box-shadow: 0 0 4px color-mix(in srgb, var(--pulse-color, #22c55e) 40%, transparent);
+      opacity: 0.85;
+    }
+    50% {
+      box-shadow: 0 0 12px var(--pulse-color, #22c55e),
+                  0 0 24px color-mix(in srgb, var(--pulse-color, #22c55e) 30%, transparent);
+      opacity: 1;
+    }
+  }
+  .animate-constellation-breathe {
+    animation: constellation-breathe 3s ease-in-out infinite;
+  }
+
+  @keyframes constellation-glow {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.2); }
+  }
+
+  .bg-constellation-grid {
+    background-image:
+      linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .dark .bg-constellation-grid {
+    background-image:
+      linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+}
+
+/* Modeler-local material, radius, and panel tokens. */
+.modeler-root {
+  --workspace-bg: #f8f8f6;
+  --glass-bg: #f7f7f5;
+  --glass-bg-hover: #efefed;
+  --glass-bg-active: #e8e8e5;
+  --glass-border: rgba(24, 24, 27, 0.1);
+  --glass-border-subtle: rgba(24, 24, 27, 0.06);
+  --glass-blur: blur(28px) saturate(140%);
+
+  --text-primary: var(--panel-text);
+  --text-secondary: var(--panel-text-secondary);
+  --text-tertiary: var(--panel-text-tertiary);
+
+  --accent-blue: #2563eb;
+  --accent-blue-hover: #1d4ed8;
+  --accent-green: #16a34a;
+
+  --radius-window: 18px;
+  --radius-panel: 14px;
+  --radius-card: 10px;
+  --radius-pill: 999px;
+  --radius-sm: 6px;
+
+  --shadow-window: 0 18px 48px rgba(0, 0, 0, 0.12);
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.1);
+
+  /* Panel design tokens (light) */
+  --panel-bg: #f7f7f5;
+  --panel-elevated: #eeeeec;
+  --panel-hover: #e5e5e2;
+  --panel-border: rgba(24, 24, 27, 0.1);
+  --panel-border-focus: rgba(24, 24, 27, 0.18);
+  --panel-text: #18181b;
+  --panel-text-secondary: #52525b;
+  --panel-text-tertiary: #71717a;
+  --panel-accent: #2563eb;
+  --panel-accent-bg: rgba(37, 99, 235, 0.08);
+  --panel-accent-border: rgba(37, 99, 235, 0.25);
+  --panel-radius: 14px;
+
+  --badge-0: #c2c5d0;
+  --badge-1: #bcc8e4;
+  --badge-2: #b6d6c6;
+  --badge-3: #ddcd98;
+  --badge-4: #e3bcab;
+  --badge-5: #ccc0e2;
+  --badge-6: #b2cfde;
+  --badge-7: #dcb9cb;
+  --badge-fg: #3f4654;
+}
+
+.modeler-root:not(:is(.dark *)) .text-white,
+.modeler-root:not(:is(.dark *)) .text-white\/90 { color: var(--panel-text); }
+.modeler-root:not(:is(.dark *)) .text-white\/80,
+.modeler-root:not(:is(.dark *)) .text-white\/70,
+.modeler-root:not(:is(.dark *)) .text-white\/60,
+.modeler-root:not(:is(.dark *)) .text-white\/50,
+.modeler-root:not(:is(.dark *)) .text-white\/40 { color: var(--panel-text-secondary); }
+.modeler-root:not(:is(.dark *)) .text-white\/30,
+.modeler-root:not(:is(.dark *)) .text-white\/25,
+.modeler-root:not(:is(.dark *)) .text-white\/20 { color: var(--panel-text-tertiary); }
+.modeler-root:not(:is(.dark *)) .bg-white\/5,
+.modeler-root:not(:is(.dark *)) .bg-black\/30,
+.modeler-root:not(:is(.dark *)) .bg-\[rgba\(0\,0\,0\,0\.3\)\],
+.modeler-root:not(:is(.dark *)) .bg-\[rgba\(0\,0\,0\,0\.2\)\] { background-color: var(--panel-bg); }
+.modeler-root:not(:is(.dark *)) .bg-white\/8,
+.modeler-root:not(:is(.dark *)) .bg-white\/10,
+.modeler-root:not(:is(.dark *)) .bg-black\/40,
+.modeler-root:not(:is(.dark *)) .bg-black\/50,
+.modeler-root:not(:is(.dark *)) .bg-\[rgba\(0\,0\,0\,0\.4\)\],
+.modeler-root:not(:is(.dark *)) .bg-neutral-900 { background-color: var(--panel-elevated); }
+.modeler-root:not(:is(.dark *)) .bg-white\/20,
+.modeler-root:not(:is(.dark *)) .bg-black\/70,
+.modeler-root:not(:is(.dark *)) .bg-black\/80,
+.modeler-root:not(:is(.dark *)) .bg-\[rgba\(0\,0\,0\,0\.6\)\] { background-color: var(--panel-hover); }
+.modeler-root:not(:is(.dark *)) .border-white\/5,
+.modeler-root:not(:is(.dark *)) .border-white\/10,
+.modeler-root:not(:is(.dark *)) .border-white\/20 { border-color: var(--panel-border); }
+.modeler-root:not(:is(.dark *)) .hover\:bg-white\/5:hover,
+.modeler-root:not(:is(.dark *)) .hover\:bg-white\/8:hover,
+.modeler-root:not(:is(.dark *)) .hover\:bg-white\/10:hover,
+.modeler-root:not(:is(.dark *)) .hover\:bg-\[rgba\(255\,255\,255\,0\.08\)\]:hover { background-color: var(--panel-hover); }
+.modeler-root:not(:is(.dark *)) .hover\:text-white:hover { color: var(--panel-text); }
+.modeler-root:not(:is(.dark *)) .placeholder\:text-white\/30::placeholder { color: var(--panel-text-tertiary); }
+
+.dark .modeler-root {
+  --workspace-bg: #08080a;
+  --glass-bg: rgba(18, 18, 20, 0.88);
+  --glass-bg-hover: rgba(39, 39, 42, 0.88);
+  --glass-bg-active: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-border-subtle: rgba(255, 255, 255, 0.05);
+  --glass-blur: blur(48px);
+
+  --text-primary: var(--panel-text);
+  --text-secondary: var(--panel-text-secondary);
+  --text-tertiary: var(--panel-text-tertiary);
+
+  --accent-blue: #0A84FF;
+  --accent-blue-hover: #007AFF;
+  --accent-green: #32D74B;
+
+  --radius-window: 18px;
+  --radius-panel: 14px;
+  --radius-card: 10px;
+  --radius-pill: 999px;
+  --radius-sm: 6px;
+
+  --shadow-window: 0 18px 48px rgba(0, 0, 0, 0.38);
+  --shadow-float: 0 8px 24px rgba(0, 0, 0, 0.3);
+
+  /* Panel design tokens (dark) */
+  --panel-bg: #121214;
+  --panel-elevated: #1D1D20;
+  --panel-hover: #27272A;
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --panel-border-focus: rgba(255, 255, 255, 0.2);
+  --panel-text: #EDEDEF;
+  --panel-text-secondary: #a1a1aa;
+  --panel-text-tertiary: #71717a;
+  --panel-accent: #0A84FF;
+  --panel-accent-bg: rgba(10, 132, 255, 0.12);
+  --panel-accent-border: rgba(10, 132, 255, 0.3);
+  --panel-radius: 14px;
+
+  --badge-0: #4b4e57;
+  --badge-1: #4f5872;
+  --badge-2: #46665d;
+  --badge-3: #6b6245;
+  --badge-4: #6e5650;
+  --badge-5: #554e6b;
+  --badge-6: #46606b;
+  --badge-7: #6a505d;
+  --badge-fg: rgba(255, 255, 255, 0.9);
+}
+
+/* Auto carries the Shader background through the whole modeler. System, Light,
+   and Dark use the resolved fixed palettes above. The small foreground
+   mixes create material depth without replacing the preset's original hue. */
+.modeler-root[data-appearance="viewport"] {
+  --workspace-bg: var(--viewport-background);
+  --glass-bg: var(--auto-theme-surface);
+  --glass-bg-hover: var(--auto-theme-hover);
+  --glass-bg-active: var(--auto-theme-active);
+  --glass-border: var(--auto-theme-border);
+  --glass-border-subtle: color-mix(in srgb, var(--auto-theme-text) 10%, transparent);
+  --text-primary: var(--auto-theme-text);
+  --text-secondary: var(--auto-theme-text-secondary);
+  --text-tertiary: var(--auto-theme-text-tertiary);
+  --accent-blue: var(--auto-theme-text);
+  --accent-blue-hover: var(--auto-theme-text-secondary);
+  --panel-bg: var(--auto-theme-surface);
+  --panel-elevated: var(--auto-theme-elevated);
+  --panel-hover: var(--auto-theme-hover);
+  --panel-border: var(--auto-theme-border);
+  --panel-border-focus: var(--auto-theme-border-focus);
+  --panel-text: var(--auto-theme-text);
+  --panel-text-secondary: var(--auto-theme-text-secondary);
+  --panel-text-tertiary: var(--auto-theme-text-tertiary);
+  --panel-accent: var(--auto-theme-text);
+  --panel-accent-bg: var(--auto-theme-elevated);
+  --panel-accent-border: var(--auto-theme-border-focus);
+}
+
+/* Molecule placement breathing animation */
+@keyframes molecule-breathe {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+.molecule-placing {
+  animation: molecule-breathe 1.5s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes slow-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Native scrollbars are hidden; a fixed overlay thumb avoids layout shifts. */
+:root { scrollbar-width: none; }
+::-webkit-scrollbar { display: none; }
+
+.scroll-overlay-thumb {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  width: var(--scroll-overlay-size);
+  height: var(--scroll-overlay-size);
+  border-radius: 999px;
+  background: var(--panel-scroll-thumb);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 260ms ease;
+  will-change: transform, opacity;
+}
+.scroll-overlay-thumb[data-visible="true"] {
+  opacity: 0.7;
+  transition-duration: 90ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-overlay-thumb { transition: none; }
+}
+
+/* The bottom tool strip stays inside the live viewport between both inspectors.
+   On compact windows every command remains reachable with direct horizontal
+   scrolling instead of disappearing underneath a side panel. */
+.modeler-toolbar-scroll {
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Glass panel utility */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: blur(48px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+}
+
+/* Chrome follows resolved appearance without becoming the same surface as the
+   scientific viewport. A short material cross-fade keeps preset changes calm. */
+.modeler-chrome-surface {
+  transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out, box-shadow 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modeler-chrome-surface { transition: none; }
+}
+
+
+/* ─── Tree view (Compute Defaults v2) ──────────────────────────────────────
+   Directory-tree look. Each .tree-children draws a vertical spine via
+   border-left; each .tree-node draws its own elbow connector ("├─" / "└─")
+   via the absolute-positioned .tree-connector pseudo-styled span. The last
+   child gets .tree-node-last to truncate the spine at its midpoint. */
+.tree-children {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tree-node {
+  position: relative;
+}
+.tree-node > .tree-connector {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.25rem;          /* 20px — matches pl-6 on .tree-node minus chevron */
+  height: 100%;
+  pointer-events: none;
+}
+/* Vertical line: full height for non-last children, half height for the last */
+.tree-node > .tree-connector::before {
+  content: '';
+  position: absolute;
+  left: 0.4rem;            /* 6.4px from left edge of .tree-node */
+  top: 0;
+  width: 1px;
+  background: var(--panel-border, rgba(0,0,0,0.18));
+  height: 100%;
+}
+.tree-node-last > .tree-connector::before {
+  height: 1rem;            /* stop at the horizontal stub */
+}
+/* Horizontal stub from the spine to the node label */
+.tree-node > .tree-connector::after {
+  content: '';
+  position: absolute;
+  left: 0.4rem;
+  top: 1rem;               /* roughly center of the first row */
+  width: 0.85rem;
+  height: 1px;
+  background: var(--panel-border, rgba(0,0,0,0.18));
+}
+/* The root <ul.tree-root> isn't a child of any .tree-node, so it doesn't
+   render a spine — root entries are siblings of the topmost domain branches. */
+.tree-root {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tree-root > .tree-node > .tree-connector::before,
+.tree-root > .tree-node > .tree-connector::after {
+  display: none;           /* top-level branches don't draw connectors */
+}
+.tree-root > .tree-node {
+  padding-left: 0 !important;
+}
+
+/* ===================================================================== */
+/* Panel UI animation kit                                                */
+/* Powers SliderRow, RangeSliderRow, press feedback + icon micro-anims. */
+/* ===================================================================== */
+
+/* Direct press feedback for high-frequency interface controls. Keep it short,
+   interruptible, and limited to compositor-safe properties. */
+.zatom-pressable {
+  touch-action: manipulation;
+  transition-property: transform, background-color, border-color, color, box-shadow, opacity;
+  transition-duration: 140ms;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+.zatom-pressable:active:not(:disabled) {
+  transform: scale(0.98);
+  transition-duration: 90ms;
+}
+.zatom-pressable:focus-visible {
+  outline: 2px solid var(--panel-accent);
+  outline-offset: 2px;
+}
+
+/* Canonical interaction surfaces. Selection uses a quiet material shift and one
+   border; blue is reserved for focus and compact state indicators. */
+.zatom-choice {
+  background: var(--panel-elevated);
+  border: 1px solid var(--panel-border);
+  color: var(--panel-text-secondary);
+}
+.zatom-choice[data-selected="true"] {
+  background: var(--control-selected-bg);
+  border-color: var(--control-selected-border);
+  color: var(--control-selected-text);
+}
+.zatom-primary {
+  background: var(--control-primary-bg);
+  border: 1px solid color-mix(in srgb, var(--control-primary-bg) 78%, var(--panel-text));
+  color: var(--control-primary-text);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.16);
+}
+.zatom-field {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  color: var(--panel-text);
+  outline: none;
+  transition: border-color 140ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+/* Keep the focus ring inside full-width fields so narrow scrollers cannot clip it. */
+  .zatom-field:focus {
+    border-color: var(--panel-border-focus);
+    box-shadow: inset 0 0 0 2px var(--panel-accent-bg);
+  }
+  .modeler-root .zatom-field:focus-visible {
+    outline: none;
+  }
+.zatom-choice:disabled,
+.zatom-primary:disabled,
+.zatom-field:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+/* The search shell owns focus feedback because it also contains the icon. */
+.ladder-search {
+  background: var(--panel-elevated);
+  border: 1px solid transparent;
+  transition: border-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.ladder-search:focus-within {
+  border-color: var(--panel-border-focus);
+  box-shadow: 0 0 0 2px var(--panel-accent-bg);
+}
+.ladder-search input:focus-visible {
+  outline: none;
+}
+
+/* A 24px hit target drives a one-pixel divider and a transient three-pixel grip. */
+.column-divider-line {
+  position: absolute;
+  inset-block: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--panel-border);
+  transition: background-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.column-divider:hover .column-divider-line,
+.column-divider[data-dragging] .column-divider-line,
+.column-divider:focus-visible .column-divider-line {
+  background: var(--panel-accent);
+}
+
+.column-divider-grip {
+  height: 1.75rem;
+  width: 3px;
+  border-radius: 9999px;
+  background: var(--panel-accent);
+  pointer-events: none;
+  opacity: 0;
+  transform: scaleY(0.4);
+  transition: opacity 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.column-divider:hover .column-divider-grip,
+.column-divider[data-dragging] .column-divider-grip,
+.column-divider:focus-visible .column-divider-grip {
+  opacity: 1;
+  transform: scaleY(1);
+}
+.column-divider:focus-visible {
+  outline: none;
+}
+
+/* Reveal sub-viewport controls only from their hot corner, hover, or keyboard focus. */
+.sub-viewport-controls {
+  opacity: 0;
+  transition: opacity 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.sub-viewport-pane:has(.sub-viewport-hotcorner:hover) .sub-viewport-controls,
+.sub-viewport-controls:hover,
+.sub-viewport-controls:focus-within {
+  opacity: 1;
+}
+
+/* Inspector system data stays one line tall. Each pill is an icon at rest,
+   then borrows horizontal room to reveal its label and value on hover,
+   keyboard focus, or touch focus. */
+.modeler-system-data-cards {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+  height: 32px;
+}
+
+.modeler-system-data-slot {
+  flex: 0 0 32px;
+  min-width: 32px;
+  max-width: 32px;
+  height: 32px;
+  transition:
+    flex-basis 460ms cubic-bezier(0.4, 0, 0.2, 1),
+    max-width 460ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modeler-system-data-slot[data-active="true"] {
+  flex: 1 1 118px;
+  max-width: 118px;
+}
+
+.modeler-system-data-slot[data-wide="true"][data-active="true"] {
+  flex-basis: 168px;
+  max-width: 168px;
+}
+
+.modeler-system-data-card {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 32px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 8px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--panel-text);
+  background: var(--panel-elevated);
+  cursor: default;
+  outline: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.modeler-system-data-icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--panel-text-secondary);
+  transition: color 140ms ease;
+}
+
+.modeler-system-data-slot[data-active="true"] .modeler-system-data-icon {
+  color: var(--panel-text);
+}
+
+.modeler-system-data-card:focus-visible {
+  border-color: var(--panel-border-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--panel-accent) 24%, transparent);
+}
+
+.modeler-system-data-label {
+  flex: 0 0 auto;
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--panel-text-tertiary);
+  opacity: 0;
+  transform: translateX(-3px);
+  transition:
+    max-width 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin-left 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 180ms ease,
+    transform 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modeler-system-data-slot[data-active="true"] .modeler-system-data-label {
+  max-width: 52px;
+  margin-left: 6px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.modeler-system-data-accent {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--control-selected-text);
+  box-shadow: 0 0 0 2px var(--control-selected-bg);
+}
+
+.modeler-system-data-value {
+  min-width: 0;
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--panel-text);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    max-width 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    margin-left 420ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 180ms ease,
+    transform 420ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modeler-system-data-slot[data-active="true"] .modeler-system-data-value {
+  max-width: 54px;
+  margin-left: 5px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.modeler-system-data-slot[data-wide="true"][data-active="true"] .modeler-system-data-value {
+  max-width: 108px;
+}
+
+/*
+ * One --fn-open value coordinates disclosure size, opacity, and staggered button
+ * timing. Delays apply only while opening so collapse remains immediate.
+ */
+.modeler-functions-disclosure {
+  --fn-open: 0;
+  --fn-grow: calc(300ms + var(--fn-open) * 240ms);
+  --fn-ease: cubic-bezier(0.22, 0.72, 0.2, 1);
+}
+
+.modeler-functions-disclosure[data-open="true"],
+.modeler-functions-disclosure:has(:focus-visible) {
+  --fn-open: 1;
+}
+
+.modeler-functions-disclosure-body {
+  opacity: 1;
+}
+
+.modeler-functions-disclosure-remainder {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    grid-template-rows var(--fn-grow) var(--fn-ease),
+    opacity calc(130ms + var(--fn-open) * 70ms) ease-out calc(var(--fn-open) * 70ms);
+}
+
+.modeler-functions-disclosure-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.modeler-functions-disclosure[data-open="true"] .modeler-functions-disclosure-remainder,
+.modeler-functions-disclosure:has(:focus-visible) .modeler-functions-disclosure-remainder {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modeler-function-grid-button {
+  --fn-step: 0ms;
+  --fn-lag: calc(var(--fn-open, 0) * (var(--fn-row, 0ms) + var(--fn-step)));
+}
+
+.modeler-function-grid-button:nth-child(3n + 2) {
+  --fn-step: 45ms;
+}
+
+.modeler-function-grid-button:nth-child(3n + 3) {
+  --fn-step: 90ms;
+}
+
+.modeler-functions-disclosure-clip .modeler-function-grid-button {
+  --fn-row: 120ms;
+  transform: translateY(calc((1 - var(--fn-open, 0)) * -10px)) scale(calc(0.965 + var(--fn-open, 0) * 0.035));
+}
+
+.modeler-function-grid-button,
+.modeler-function-grid-button-content,
+.modeler-function-grid-button-label,
+.modeler-function-grid-button svg {
+  transition:
+    min-height var(--fn-grow, 460ms) var(--fn-ease, ease) var(--fn-lag, 0ms),
+    padding var(--fn-grow, 460ms) var(--fn-ease, ease) var(--fn-lag, 0ms),
+    border-radius var(--fn-grow, 460ms) var(--fn-ease, ease) var(--fn-lag, 0ms),
+    transform 340ms var(--fn-ease, ease) var(--fn-lag, 0ms),
+    gap 300ms var(--fn-ease, ease) var(--fn-lag, 0ms),
+    width 300ms var(--fn-ease, ease) var(--fn-lag, 0ms),
+    height 300ms var(--fn-ease, ease) var(--fn-lag, 0ms),
+    font-size 220ms ease calc(var(--fn-lag, 0ms) + var(--fn-open, 0) * 80ms),
+    background-color 520ms ease,
+    border-color 520ms ease;
+}
+
+.modeler-function-grid-button[data-compact="true"] {
+  min-height: 32px;
+  flex-direction: row;
+  gap: 4px;
+  padding: 4px 7px;
+  border-radius: 8px;
+}
+
+.modeler-function-grid-button[data-compact="true"] .modeler-function-grid-button-content {
+  flex-direction: row;
+  gap: 4px;
+}
+
+.modeler-function-grid-button[data-compact="true"] svg {
+  width: 12px;
+  height: 12px;
+}
+
+.modeler-function-grid-button[data-compact="true"] .modeler-function-grid-button-label {
+  font-size: 8px !important;
+}
+
+.modeler-functions-disclosure[data-open="true"] .modeler-function-grid-button[data-compact="true"],
+.modeler-functions-disclosure:has(:focus-visible) .modeler-function-grid-button[data-compact="true"] {
+  min-height: 64px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 8px;
+  border-radius: 12px;
+}
+
+.modeler-functions-disclosure[data-open="true"] .modeler-function-grid-button[data-compact="true"] .modeler-function-grid-button-content,
+.modeler-functions-disclosure:has(:focus-visible) .modeler-function-grid-button[data-compact="true"] .modeler-function-grid-button-content {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.modeler-functions-disclosure[data-open="true"] .modeler-function-grid-button[data-compact="true"] svg,
+.modeler-functions-disclosure:has(:focus-visible) .modeler-function-grid-button[data-compact="true"] svg {
+  width: 16px;
+  height: 16px;
+}
+
+.modeler-functions-disclosure[data-open="true"] .modeler-function-grid-button[data-compact="true"] .modeler-function-grid-button-label,
+.modeler-functions-disclosure:has(:focus-visible) .modeler-function-grid-button[data-compact="true"] .modeler-function-grid-button-label {
+  font-size: 9px !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .modeler-functions-disclosure:hover {
+    --fn-open: 1;
+  }
+
+  .modeler-functions-disclosure:hover .modeler-functions-disclosure-remainder {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .modeler-functions-disclosure:hover .modeler-function-grid-button[data-compact="true"] {
+    min-height: 64px;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 8px;
+    border-radius: 12px;
+  }
+
+  .modeler-functions-disclosure:hover .modeler-function-grid-button[data-compact="true"] .modeler-function-grid-button-content {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .modeler-functions-disclosure:hover .modeler-function-grid-button[data-compact="true"] svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .modeler-functions-disclosure:hover .modeler-function-grid-button[data-compact="true"] .modeler-function-grid-button-label {
+    font-size: 9px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep disclosure behavior but remove its large layout transitions. */
+  .modeler-functions-disclosure-remainder,
+  .modeler-function-grid-button,
+  .modeler-function-grid-button-content,
+  .modeler-function-grid-button-label,
+  .modeler-function-grid-button svg {
+    transition: none;
+  }
+
+  .modeler-functions-disclosure-clip .modeler-function-grid-button {
+    transform: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .zatom-choice:not([data-selected="true"]):not(:disabled):hover {
+    background: var(--panel-hover);
+  }
+  .zatom-primary:not(:disabled):hover {
+    background: var(--control-primary-hover);
+  }
+
+  /* Tool-family color appears only as a restrained hover tint. */
+  .modeler-function-grid-button[data-family]:not([data-selected="true"]):not(:disabled):hover {
+    background: color-mix(in oklab, var(--tool-family) 12%, var(--panel-hover));
+    border-color: color-mix(in oklab, var(--tool-family) 28%, var(--panel-border));
+  }
+}
+
+/* Expanded sidebars are dense reading surfaces. Collapsed rails keep the same
+   semantic material at high opacity so manual Light/Dark overrides remain legible
+   even when the viewport uses the opposite luminance. */
+.modeler-side-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+}
+
+.modeler-side-panel[data-collapsed="true"] {
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  box-shadow: 0 14px 38px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(28px) saturate(150%);
+  -webkit-backdrop-filter: blur(28px) saturate(150%);
+}
+.dark .modeler-side-panel[data-collapsed="true"] {
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.modeler-root :where(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--panel-accent);
+  outline-offset: 2px;
+}
+.agent-modeling {
+  font-optical-sizing: auto;
+}
+.agent-modeling button {
+  touch-action: manipulation;
+}
+.agent-modeling button:focus-visible,
+.agent-modeling input:focus-visible,
+.agent-modeling select:focus-visible,
+.agent-modeling textarea:focus-visible {
+  outline: 2px solid var(--panel-accent);
+  outline-offset: 2px;
+}
+
+/* Semantic status tones. Large surfaces stay quiet; color is reserved for the
+   status signal itself so scientific panels remain readable in every theme. */
+:root {
+  --status-green: #1f673d;
+  --status-green-bg: color-mix(in srgb, var(--status-green) 9%, transparent);
+  --status-green-border: color-mix(in srgb, var(--status-green) 26%, transparent);
+  --status-amber: #70450d;
+  --status-amber-bg: color-mix(in srgb, var(--status-amber) 9%, transparent);
+  --status-amber-border: color-mix(in srgb, var(--status-amber) 26%, transparent);
+  --status-red: #903832;
+  --status-red-bg: color-mix(in srgb, var(--status-red) 8%, transparent);
+  --status-red-border: color-mix(in srgb, var(--status-red) 25%, transparent);
+  --status-neutral: #505967;
+  --status-neutral-bg: color-mix(in srgb, var(--status-neutral) 9%, transparent);
+  --status-neutral-border: color-mix(in srgb, var(--status-neutral) 23%, transparent);
+}
+.dark {
+  --status-green: #7bc494;
+  --status-green-bg: color-mix(in srgb, var(--status-green) 12%, transparent);
+  --status-green-border: color-mix(in srgb, var(--status-green) 27%, transparent);
+  --status-amber: #d6a45f;
+  --status-amber-bg: color-mix(in srgb, var(--status-amber) 12%, transparent);
+  --status-amber-border: color-mix(in srgb, var(--status-amber) 27%, transparent);
+  --status-red: #e78982;
+  --status-red-bg: color-mix(in srgb, var(--status-red) 11%, transparent);
+  --status-red-border: color-mix(in srgb, var(--status-red) 27%, transparent);
+  --status-neutral: #a6adbb;
+  --status-neutral-bg: color-mix(in srgb, var(--status-neutral) 10%, transparent);
+  --status-neutral-border: color-mix(in srgb, var(--status-neutral) 22%, transparent);
+}
+.status-amber { color: var(--status-amber); }
+.status-red { color: var(--status-red); }
+.status-green { color: var(--status-green); }
+.status-neutral { color: var(--status-neutral); }
+.status-amber-soft { color: color-mix(in srgb, var(--status-amber) 85%, var(--panel-text-tertiary)); }
+.status-red-soft { color: color-mix(in srgb, var(--status-red) 85%, var(--panel-text-tertiary)); }
+.status-surface-amber {
+  color: var(--status-amber);
+  background: var(--status-amber-bg);
+  border-color: var(--status-amber-border);
+}
+.status-surface-red {
+  color: var(--status-red);
+  background: var(--status-red-bg);
+  border-color: var(--status-red-border);
+}
+.status-surface-green {
+  color: var(--status-green);
+  background: var(--status-green-bg);
+  border-color: var(--status-green-border);
+}
+.status-hover-red:hover {
+  color: var(--status-red);
+  background: var(--status-red-bg);
+}
+
+/* Brand-accent utilities are distinct from semantic success/warning/error colors. */
+.panel-accent { color: var(--panel-accent); }
+.panel-surface-accent {
+  background: var(--panel-accent-bg);
+  border-color: var(--panel-accent-border);
+}
+.panel-btn-accent {
+  background: var(--panel-accent);
+  color: #fff;
+}
+.panel-btn-accent:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--panel-accent) 86%, #000);
+}
+.panel-btn-accent-outline {
+  color: var(--panel-accent);
+  border-color: var(--panel-accent-border);
+}
+.panel-btn-accent-outline:hover:not(:disabled) {
+  background: var(--panel-accent-bg);
+}
+.panel-btn-accent:disabled,
+.panel-btn-accent-outline:disabled {
+  /* Disabled primary actions become neutral instead of remaining visually dominant. */
+  background: color-mix(in srgb, var(--panel-text-tertiary) 12%, transparent);
+  color: var(--panel-text-tertiary);
+  border-color: transparent;
+  cursor: not-allowed;
+}
+
+/* Viewport-derived themes use fixed-lightness chart hues to remain distinguishable. */
+html[data-appearance="viewport"] {
+  --status-green: var(--auto-theme-status-success);
+  --status-amber: var(--auto-theme-status-warning);
+  --status-red: var(--auto-theme-status-error);
+  --status-neutral: var(--auto-theme-status-neutral);
+  --status-green-bg: color-mix(in srgb, var(--status-green) 10%, transparent);
+  --status-green-border: color-mix(in srgb, var(--status-green) 24%, transparent);
+  --status-amber-bg: color-mix(in srgb, var(--status-amber) 10%, transparent);
+  --status-amber-border: color-mix(in srgb, var(--status-amber) 26%, transparent);
+  --status-red-bg: color-mix(in srgb, var(--status-red) 10%, transparent);
+  --status-red-border: color-mix(in srgb, var(--status-red) 24%, transparent);
+  --status-neutral-bg: color-mix(in srgb, var(--status-neutral) 10%, transparent);
+  --status-neutral-border: color-mix(in srgb, var(--status-neutral) 22%, transparent);
+  --chart-1: oklch(0.62 0.17 240);
+  --chart-2: oklch(0.62 0.13 180);
+  --chart-3: oklch(0.62 0.15 150);
+  --chart-4: oklch(0.62 0.19 295);
+  --chart-5: oklch(0.62 0.19 350);
+}
+
+/* ----- filled-track range slider (SliderRow) ----- */
+.zatom-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+.zatom-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--slider-accent, var(--panel-accent)) 0%,
+    var(--slider-accent, var(--panel-accent)) var(--slider-fill, 50%),
+    var(--panel-hover) var(--slider-fill, 50%),
+    var(--panel-hover) 100%
+  );
+}
+.zatom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -5px;
+  height: 16px;
+  width: 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--panel-border-focus);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 0 var(--panel-accent-bg);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.zatom-slider:hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25), 0 0 0 4px var(--panel-accent-bg);
+}
+.zatom-slider:active::-webkit-slider-thumb {
+  transform: scale(1.05);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), 0 0 0 6px var(--panel-accent-bg);
+}
+.zatom-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-hover);
+}
+.zatom-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--slider-accent, var(--panel-accent));
+}
+.zatom-slider::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--panel-border-focus);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.zatom-slider:hover::-moz-range-thumb {
+  transform: scale(1.12);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25), 0 0 0 4px var(--panel-accent-bg);
+}
+
+/* ----- dual-handle range (RangeSliderRow): transparent overlay inputs ----- */
+.zatom-range-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+}
+.zatom-range-thumb::-webkit-slider-runnable-track { background: transparent; height: 20px; }
+.zatom-range-thumb::-moz-range-track { background: transparent; height: 20px; }
+.zatom-range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  height: 16px;
+  width: 16px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--panel-border-focus);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.zatom-range-thumb::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25), 0 0 0 4px var(--panel-accent-bg);
+}
+.zatom-range-thumb:active::-webkit-slider-thumb { cursor: grabbing; transform: scale(1.08); }
+.zatom-range-thumb::-moz-range-thumb {
+  pointer-events: auto;
+  height: 16px;
+  width: 16px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid var(--panel-border-focus);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modeler-root,
+  .modeler-root *,
+  .modeler-root *::before,
+  .modeler-root *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .zatom-pressable,
+  .zatom-pressable:active:not(:disabled) {
+    transition-duration: 0ms;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .modeler-root {
+    --glass-bg: var(--panel-bg);
+    --glass-blur: blur(0px);
+  }
+  .modeler-root :where(.glass-panel, [role="toolbar"]) {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .modeler-side-panel[data-collapsed="true"] {
+    background: var(--panel-bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .modeler-root {
+    --panel-border: color-mix(in srgb, var(--panel-text) 36%, transparent);
+    --panel-text-secondary: color-mix(in srgb, var(--panel-text) 78%, transparent);
+    --panel-text-tertiary: color-mix(in srgb, var(--panel-text) 64%, transparent);
+    --glass-border: color-mix(in srgb, var(--panel-text) 38%, transparent);
+  }
+  .modeler-side-panel[data-collapsed="true"] {
+    background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+    border-color: var(--panel-border-focus);
+  }
+}
+
+/* ─── Zatom shell ─── */
+html, body, #root { height: 100%; margin: 0; }
+body { overflow: hidden; }
+
+/* ─── truthful branded startup ─────────────────────────────────────────────
+ * The mark is immediate; motion appears only when startup lasts long enough to
+ * need feedback. Nothing here owns a minimum duration or blocks readiness. */
+.zatom-startup {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: var(--foreground);
+  background: var(--background);
+  transition: color 160ms ease-out, background-color 160ms ease-out;
+}
+
+.zatom-startup__content {
+  display: flex;
+  width: min(88vw, 360px);
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.zatom-startup__mark {
+  width: clamp(76px, 9vw, 104px);
+  height: clamp(76px, 9vw, 104px);
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.zatom-startup__identity {
+  margin-top: 14px;
+}
+
+.zatom-startup__identity h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 680;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.zatom-startup__identity p {
+  margin: 7px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 520;
+  letter-spacing: 0.01em;
+}
+
+.zatom-startup__signal {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 14px;
+  margin-top: 28px;
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+}
+
+.zatom-startup__signal[data-visible="true"] {
+  opacity: 1;
+}
+
+.zatom-startup__signal span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  opacity: 0.3;
+  transform: translateY(0);
+  animation: zatom-startup-signal 1.05s ease-in-out infinite;
+}
+
+.zatom-startup__signal span:nth-child(1) {
+  background: #c8e2ff;
+}
+
+.zatom-startup__signal span:nth-child(2) {
+  background: currentColor;
+  animation-delay: 120ms;
+}
+
+.zatom-startup__signal span:nth-child(3) {
+  background: #ffe7cc;
+  animation-delay: 240ms;
+}
+
+.zatom-startup__status {
+  min-height: 18px;
+  margin: 9px 0 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.zatom-startup__copyright {
+  position: absolute;
+  right: 20px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 20px;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0.72;
+}
+
+.zatom-startup__recovery {
+  display: flex;
+  margin-top: 18px;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.zatom-startup__recovery p {
+  margin: 0;
+}
+
+.zatom-startup__recovery button {
+  min-height: 32px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--foreground);
+  background: var(--card);
+  font: inherit;
+  font-weight: 620;
+  cursor: pointer;
+  transition: transform 100ms ease-out, background-color 140ms ease-out;
+}
+
+.zatom-startup__recovery button:hover {
+  background: var(--accent);
+}
+
+.zatom-startup__recovery button:active {
+  transform: scale(0.97);
+}
+
+.zatom-startup__recovery button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@keyframes zatom-startup-signal {
+  0%, 58%, 100% { opacity: 0.3; transform: translateY(0); }
+  18% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zatom-startup,
+  .zatom-startup__signal {
+    transition: none;
+  }
+
+  .zatom-startup__signal span {
+    animation: none;
+    opacity: 0.72;
+    transform: none;
+  }
+
+  .zatom-startup__recovery button {
+    transition: none;
+  }
+
+  .zatom-startup__recovery button:active {
+    transform: none;
+  }
+}

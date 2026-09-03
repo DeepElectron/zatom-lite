@@ -1,0 +1,102 @@
+zatom.zauq.tech {
+	root * /srv/zatom-current
+	encode zstd gzip
+
+	@hidden path */.*
+	@boltzRoutes path /boltz-api /boltz-api/* /boltz-artifact /boltz-artifact/*
+	@apiMethodDenied {
+		path /boltz-api/*
+		not method GET POST DELETE
+	}
+	@artifactMethodDenied {
+		path /boltz-artifact/*
+		not method GET
+	}
+
+	# The browser sends the user's Boltz key only to this fixed upstream.
+	# Skip every Boltz route so API keys and signed artifact URLs never reach
+	# the site access log, including denied and exact-root requests.
+	log_skip @boltzRoutes
+
+	# Keep this route in literal order: hidden proxy paths must fail before a
+	# handle_path can strip their prefix and forward them upstream.
+	route {
+		respond @hidden 404
+		respond /boltz-api 404
+		respond /boltz-artifact 404
+		respond @apiMethodDenied 405
+		respond @artifactMethodDenied 405
+
+		handle_path /boltz-api/* {
+			reverse_proxy https://api.boltz.bio {
+				header_up Host api.boltz.bio
+				header_up -Authorization
+				header_up -Cookie
+				header_up -Origin
+				header_up -Referer
+				header_up -X-Forwarded-For
+				header_down -Server
+				header_down -Strict-Transport-Security
+			}
+		}
+
+		handle_path /boltz-artifact/* {
+			reverse_proxy https://boltz-platform-prod-compute-api-storage.s3.us-east-1.amazonaws.com {
+				header_up Host boltz-platform-prod-compute-api-storage.s3.us-east-1.amazonaws.com
+				header_up -Authorization
+				header_up -Cookie
+				header_up -Origin
+				header_up -Referer
+				header_up -X-Api-Key
+				header_up -X-Forwarded-For
+				header_down -Server
+				header_down -Strict-Transport-Security
+			}
+		}
+
+		handle /healthz {
+			try_files /release.json =503
+			file_server
+		}
+
+		# The version file is available only through /healthz.
+		respond /release.json 404
+		respond /__zatom-cli/* 404
+
+		handle /assets/* {
+			file_server
+		}
+
+		handle /boltz-examples/* {
+			file_server
+		}
+
+		handle /trajectories/* {
+			file_server
+		}
+
+		handle {
+			try_files {path} /index.html
+			file_server
+		}
+	}
+
+	@mutable path / /index.html /theme-bootstrap.js /boltz-examples/manifest.json
+	header @mutable Cache-Control "no-cache, must-revalidate"
+	header /healthz Cache-Control "no-store"
+	header /assets/* Cache-Control "public, max-age=31536000, immutable"
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Origin-Agent-Cluster "?1"
+		Permissions-Policy "tools=(self), camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://files.rcsb.org; worker-src 'self' blob:; child-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'; frame-ancestors 'none'"
+	}
+
+	log {
+		output file /var/log/caddy/zatom.zauq.tech.log
+	}
+}
