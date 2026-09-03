@@ -1,8 +1,22 @@
-# Zatom WebMCP Challenge Edition
+<p align="center">
+  <a href="https://zatom.zauq.tech/">
+    <img src="assets/zatom-logo.png" alt="Zatom ロゴ" width="144">
+  </a>
+</p>
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+<h1 align="center">Zatom WebMCP Challenge Edition</h1>
 
-> 人と AI Agent が、同じ科学空間でともに作業できるように。
+<p align="center">人と AI Agent が、同じ科学空間でともに作業できるように。</p>
+
+<p align="center">
+  <a href="https://zatom.zauq.tech/">公式サイト</a>
+  ·
+  <a href="README.md">English</a>
+  ·
+  <a href="README.zh-CN.md">简体中文</a>
+  ·
+  <a href="README.ja.md">日本語</a>
+</p>
 
 私たちが目指すのは、AI がチャット欄でただこう答えることではありません。
 

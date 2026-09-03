@@ -1,8 +1,22 @@
-# Zatom WebMCP Challenge Edition
+<p align="center">
+  <a href="https://zatom.zauq.tech/">
+    <img src="assets/zatom-logo.png" alt="Zatom 标志" width="144">
+  </a>
+</p>
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+<h1 align="center">Zatom WebMCP Challenge Edition</h1>
 
-> 让人与 AI Agent 在同一个科学空间里工作。
+<p align="center">让人与 AI Agent 在同一个科学空间里工作。</p>
+
+<p align="center">
+  <a href="https://zatom.zauq.tech/">官方网站</a>
+  ·
+  <a href="README.md">English</a>
+  ·
+  <a href="README.zh-CN.md">简体中文</a>
+  ·
+  <a href="README.ja.md">日本語</a>
+</p>
 
 我们想做的，不是让 AI 只在聊天框里告诉你：
 

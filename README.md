@@ -1,8 +1,22 @@
-# Zatom — WebMCP Challenge Edition
+<p align="center">
+  <a href="https://zatom.zauq.tech/">
+    <img src="assets/zatom-logo.png" alt="Zatom logo" width="144">
+  </a>
+</p>
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+<h1 align="center">Zatom WebMCP Challenge Edition</h1>
 
-> Let people and AI agents work in the same scientific world.
+<p align="center">Let people and AI agents work in the same scientific world.</p>
+
+<p align="center">
+  <a href="https://zatom.zauq.tech/">Website</a>
+  ·
+  <a href="README.md">English</a>
+  ·
+  <a href="README.zh-CN.md">简体中文</a>
+  ·
+  <a href="README.ja.md">日本語</a>
+</p>
 
 The goal is not to have an AI tell you in a chat window that “atom 184 is located at these coordinates.” It is to let you and the agent look at the same molecule, crystal, or surface and talk naturally:
 
