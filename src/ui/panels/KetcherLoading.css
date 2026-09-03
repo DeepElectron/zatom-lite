@@ -1,0 +1,137 @@
+/*
+ * Single loading layer for the lazy Ketcher editor. The comet trace, staggered
+ * vertex pulses, and aromatic ring form one molecular animation; the opaque host
+ * hides Ketcher's own loader. Reduced-motion mode preserves a static indicator.
+ */
+.ketl-root {
+  position: absolute;
+  inset: 0;
+  z-index: 10; /* sit above Ketcher's own Indigo loader / the lazy chunk */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #ffffff;
+}
+
+.ketl-svg {
+  width: 96px;
+  height: 96px;
+  overflow: visible;
+}
+
+/* faint base hexagon */
+.ketl-base {
+  fill: none;
+  stroke: rgba(124, 58, 237, 0.16);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+/* bright comet tracing around the ring */
+.ketl-trace {
+  fill: none;
+  stroke: #7c3aed;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 42 138; /* perimeter ≈ 180 */
+  filter: drop-shadow(0 0 4px rgba(124, 58, 237, 0.5));
+  animation: ketl-trace 2.1s linear infinite;
+}
+
+@keyframes ketl-trace {
+  to {
+    stroke-dashoffset: -180;
+  }
+}
+
+/* central aromatic ring */
+.ketl-aromatic {
+  fill: none;
+  stroke: rgba(124, 58, 237, 0.35);
+  stroke-width: 2;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: ketl-aromatic 2.1s ease-in-out infinite;
+}
+
+@keyframes ketl-aromatic {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.86);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+}
+
+/* vertex atoms — pulse in sequence so the highlight travels with the comet */
+.ketl-atom {
+  fill: #a78bfa;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: ketl-atom 2.1s ease-in-out infinite;
+}
+.ketl-atom-0 {
+  animation-delay: 0s;
+}
+.ketl-atom-1 {
+  animation-delay: -0.35s;
+}
+.ketl-atom-2 {
+  animation-delay: -0.7s;
+}
+.ketl-atom-3 {
+  animation-delay: -1.05s;
+}
+.ketl-atom-4 {
+  animation-delay: -1.4s;
+}
+.ketl-atom-5 {
+  animation-delay: -1.75s;
+}
+
+@keyframes ketl-atom {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.35);
+    fill: #7c3aed;
+  }
+}
+
+.ketl-label {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: #6b7280;
+}
+
+/* dark mode: match the Ketcher dark host so the loader doesn't flash white */
+.dark .ketl-root {
+  background: #1b1b1f;
+}
+.dark .ketl-label {
+  color: #8b8b93;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ketl-trace,
+  .ketl-aromatic,
+  .ketl-atom {
+    animation: none;
+  }
+  .ketl-trace {
+    stroke-dasharray: none;
+  }
+  .ketl-atom {
+    opacity: 1;
+  }
+}

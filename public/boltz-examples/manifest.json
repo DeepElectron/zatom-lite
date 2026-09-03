@@ -1,0 +1,191 @@
+[
+  {
+    "id": "kras-sotorasib",
+    "candidates": [
+      {
+        "score": 0,
+        "structure": "boltz-examples/kras-sotorasib/00-structure.cif"
+      },
+      {
+        "score": 0,
+        "structure": "boltz-examples/kras-sotorasib/01-structure.cif"
+      },
+      {
+        "score": 0,
+        "structure": "boltz-examples/kras-sotorasib/02-structure.cif"
+      },
+      {
+        "score": 0,
+        "structure": "boltz-examples/kras-sotorasib/03-structure.cif"
+      },
+      {
+        "score": 0,
+        "structure": "boltz-examples/kras-sotorasib/04-structure.cif"
+      },
+      {
+        "score": 0,
+        "structure": "boltz-examples/kras-sotorasib/05-structure.cif"
+      },
+      {
+        "score": 0,
+        "structure": "boltz-examples/kras-sotorasib/06-structure.cif"
+      },
+      {
+        "score": 0,
+        "structure": "boltz-examples/kras-sotorasib/07-structure.cif"
+      }
+    ]
+  },
+  {
+    "id": "abl1-tki-screen",
+    "candidates": [
+      {
+        "score": 0.09513362497091293,
+        "structure": "boltz-examples/abl1-tki-screen/00-structure.cif"
+      },
+      {
+        "score": 0.9392686486244202,
+        "structure": "boltz-examples/abl1-tki-screen/01-structure.cif"
+      },
+      {
+        "score": 0.6544288396835327,
+        "structure": "boltz-examples/abl1-tki-screen/02-structure.cif"
+      },
+      {
+        "score": 0.06054481863975525,
+        "structure": "boltz-examples/abl1-tki-screen/03-structure.cif"
+      },
+      {
+        "score": 0.6806840896606445,
+        "structure": "boltz-examples/abl1-tki-screen/04-structure.cif"
+      }
+    ]
+  },
+  {
+    "id": "pdl1-binder-design",
+    "candidates": [
+      {
+        "score": 0.00001604490561665126,
+        "structure": "boltz-examples/pdl1-binder-design/00-structure.cif"
+      },
+      {
+        "score": 0.3892651989695836,
+        "structure": "boltz-examples/pdl1-binder-design/01-structure.cif"
+      },
+      {
+        "score": 0.08077739478065703,
+        "structure": "boltz-examples/pdl1-binder-design/02-structure.cif"
+      },
+      {
+        "score": 0.0031651157880387467,
+        "structure": "boltz-examples/pdl1-binder-design/03-structure.cif"
+      },
+      {
+        "score": 0.000023851816262412292,
+        "structure": "boltz-examples/pdl1-binder-design/04-structure.cif"
+      },
+      {
+        "score": 0.00003508059909359925,
+        "structure": "boltz-examples/pdl1-binder-design/05-structure.cif"
+      },
+      {
+        "score": 0.2694904918985132,
+        "structure": "boltz-examples/pdl1-binder-design/06-structure.cif"
+      },
+      {
+        "score": 0.000005857541327713989,
+        "structure": "boltz-examples/pdl1-binder-design/07-structure.cif"
+      },
+      {
+        "score": 0.6819695612092733,
+        "structure": "boltz-examples/pdl1-binder-design/08-structure.cif"
+      },
+      {
+        "score": 0.0023371560909830223,
+        "structure": "boltz-examples/pdl1-binder-design/09-structure.cif"
+      }
+    ]
+  },
+  {
+    "id": "pdl1-candidate-screen",
+    "candidates": [
+      {
+        "score": 0.00001403410715283826,
+        "structure": "boltz-examples/pdl1-candidate-screen/00-structure.cif"
+      },
+      {
+        "score": 0.0000226207612286089,
+        "structure": "boltz-examples/pdl1-candidate-screen/01-structure.cif"
+      },
+      {
+        "score": 0.000012980121937289368,
+        "structure": "boltz-examples/pdl1-candidate-screen/02-structure.cif"
+      },
+      {
+        "score": 0.00000945802457863465,
+        "structure": "boltz-examples/pdl1-candidate-screen/03-structure.cif"
+      },
+      {
+        "score": 0.00016824813792482018,
+        "structure": "boltz-examples/pdl1-candidate-screen/04-structure.cif"
+      },
+      {
+        "score": 0.6152164936065674,
+        "structure": "boltz-examples/pdl1-candidate-screen/05-structure.cif"
+      },
+      {
+        "score": 0.000012633226106117945,
+        "structure": "boltz-examples/pdl1-candidate-screen/06-structure.cif"
+      },
+      {
+        "score": 0.6342443227767944,
+        "structure": "boltz-examples/pdl1-candidate-screen/07-structure.cif"
+      }
+    ]
+  },
+  {
+    "id": "kras-ligand-design",
+    "candidates": [
+      {
+        "score": 0.08624953031539917,
+        "structure": "boltz-examples/kras-ligand-design/00-structure.cif"
+      },
+      {
+        "score": 0.20717072486877441,
+        "structure": "boltz-examples/kras-ligand-design/01-structure.cif"
+      },
+      {
+        "score": 0.11826732754707336,
+        "structure": "boltz-examples/kras-ligand-design/02-structure.cif"
+      },
+      {
+        "score": 0.20944415032863617,
+        "structure": "boltz-examples/kras-ligand-design/03-structure.cif"
+      },
+      {
+        "score": 0.21360164880752563,
+        "structure": "boltz-examples/kras-ligand-design/04-structure.cif"
+      },
+      {
+        "score": 0.42527633905410767,
+        "structure": "boltz-examples/kras-ligand-design/05-structure.cif"
+      },
+      {
+        "score": 0.10352454334497452,
+        "structure": "boltz-examples/kras-ligand-design/06-structure.cif"
+      },
+      {
+        "score": 0.1590476930141449,
+        "structure": "boltz-examples/kras-ligand-design/07-structure.cif"
+      },
+      {
+        "score": 0.08851046115159988,
+        "structure": "boltz-examples/kras-ligand-design/08-structure.cif"
+      },
+      {
+        "score": 0.08355587720870972,
+        "structure": "boltz-examples/kras-ligand-design/09-structure.cif"
+      }
+    ]
+  }
+]
