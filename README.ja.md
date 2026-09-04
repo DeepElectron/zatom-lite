@@ -136,6 +136,13 @@ Point one hydrogen toward that oxygen.
 
 私たちは、この能力を「空間的注意の共有」（Shared Spatial Attention）と呼んでいます。Agent はソフトウェアを操作するだけでなく、あなたが何を見ているのかを知り、自分が何を考え、どこに注目しているのかを伝える必要があります。
 
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="assets/demo/model-together.gif" alt="Zatom で AI Agent と指し示し、選択し、調整し、確認する" width="640">
+  </a><br>
+  <sub>同じワークスペースで、指し示し、選択し、調整し、確認する。</sub>
+</p>
+
 ## 02 構造を増やすだけで終わらない
 
 ### Understand Deeper
@@ -176,6 +183,13 @@ Why?
 
 構造から電子構造へ、そして機構へ。Agent はモデルを描く手伝いをするだけでなく、一緒に観察し、比べ、分析し、問いを立て、説明を探すことができます。
 
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="assets/demo/understand-deeper.gif" alt="Zatom で幾何構造、軌道、電子密度、電荷、スライス、反応機構を確認する" width="640">
+  </a><br>
+  <sub>構造から軌道、電子密度、電荷、スライス、反応機構へ進む。</sub>
+</p>
+
 ## 03 モデリングはワークフローの終点ではない
 
 ### Compute Openly
@@ -189,6 +203,13 @@ Zatom は、よりオープンな計算化学エコシステムの循環をつ�
 ```text
 Model -> Compute -> Analyze -> Visualize -> Understand -> Ask the next question
 ```
+
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="assets/demo/compute-openly.gif" alt="AI Agent と科学計算を設定、実行、確認する" width="640">
+  </a><br>
+  <sub>Agent とともに計算を設定し、実行し、結果を確認して推論を続ける。</sub>
+</p>
 
 AI Agent を通じて、複雑な科学ソフトウェア、計算手順、専門知識をつなぎます。モデルをつくった後も、ユーザーは Agent とともに次の作業を続けられます。
 
@@ -264,6 +285,13 @@ AI は、すでに科学ソフトウェアに慣れている人の作業を速�
 - 選択状態（Selection State）
 - 空間関係（Spatial Relations）
 - 化学状態（Chemical State）
+
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="assets/demo/structured-perception.gif" alt="科学の 3D 世界を AI Agent が推論できる構造化観測へ変換する" width="640">
+  </a><br>
+  <sub>スクリーンショットから復元するのではなく、科学構造を直接エンコードする。</sub>
+</p>
 
 そこで私たちは、3D の科学世界を、言語モデルが推論しやすい構造化された観測表現（observation）に変換する方法を試しています。単なるスクリーンショットではなく、次のような表現です。
 

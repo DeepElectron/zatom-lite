@@ -114,6 +114,13 @@ We call this **shared spatial attention**.
 
 The agent should not merely operate the software. It should know what you are looking at—and show you what it is reasoning about.
 
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="assets/demo/model-together.gif" alt="Point, select, adjust, and decide with an AI agent in Zatom" width="640">
+  </a><br>
+  <sub>Point, select, adjust, and decide in one shared workspace.</sub>
+</p>
+
 ### 2. Understand deeper
 
 AI can make high-throughput model generation faster. But the more important question is not how many structures we can generate in a day. It is whether we can understand a structure, reaction, or mechanism sooner.
@@ -150,6 +157,13 @@ Why?
 
 From **structure**, to **electronic structure**, to **mechanism**, an agent can help you look, compare, analyze, ask questions, and search for explanations—not simply draw a model.
 
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="assets/demo/understand-deeper.gif" alt="Explore geometry, orbitals, electron density, charge, slices, and mechanisms in Zatom" width="640">
+  </a><br>
+  <sub>Move from structure to orbitals, density, charge, slices, and mechanisms.</sub>
+</p>
+
 ### 3. Compute openly
 
 We believe AGI can help make science and technology more accessible.
@@ -171,6 +185,13 @@ Understand
   ↓
 Ask the next question
 ```
+
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="assets/demo/compute-openly.gif" alt="Set up, run, and inspect scientific calculations with an AI agent" width="640">
+  </a><br>
+  <sub>Set up, run, inspect, and continue reasoning with the agent.</sub>
+</p>
 
 AI agents can connect scientific software, computational workflows, and domain knowledge that are currently separated. After creating a model, a user should be able to continue working with the agent to:
 
@@ -230,6 +251,13 @@ Much of the information in scientific modeling is poorly suited to being reconst
 - selection state
 - spatial relationships
 - chemical state
+
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="assets/demo/structured-perception.gif" alt="Encode a scientific 3D world into a structured observation for an AI agent" width="640">
+  </a><br>
+  <sub>Encode scientific structure directly instead of reconstructing it from screenshots.</sub>
+</p>
 
 We are therefore experimenting with converting a 3D scientific world into a structured observation that is better suited to language-model reasoning. Instead of this:
 
