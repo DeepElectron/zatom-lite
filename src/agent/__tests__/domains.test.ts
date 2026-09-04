@@ -110,6 +110,7 @@ describe('zatom tool domains', () => {
     expect(zatomToolTier('assets_mount_local_file', { applyToWorkspace: true })).toBe('mutate')
     expect(zatomToolDomain('structure_apply_operations')).toBe('direct-edit')
     expect(ZATOM_DEFAULT_TOOL_DOMAINS).not.toContain('direct-edit')
+    expect(ZATOM_DEFAULT_TOOL_DOMAINS).not.toContain('assets')
   })
 
   it('always keeps session reachable and reports unknown domain names', () => {

@@ -7,6 +7,7 @@ import {
   ZATOM_WEBMCP_CORE_TOOLS,
   ZATOM_WEBMCP_FACADE_TOOLS,
   ZATOM_WEBMCP_REGISTERED_TOOLS,
+  ZATOM_WEBMCP_SYSTEM_TOOLS,
   isReadOnlyTool,
   isZatomWebMcpCallableTool,
 } from './webmcp-adapter'
@@ -27,9 +28,10 @@ export interface ZatomWebMcpRuntimeProfile {
   tools: {
     /** Total tools in the registry, enabled or not. */
     available: number
-    /** Core direct tools plus the three long-tail facade tools. */
+    /** Maximum direct core plus stable discovery/access tools. */
     registered: number
     facade: readonly string[]
+    system: readonly string[]
     core: readonly string[]
     /** Registry tools callable through `zatom_call_tool` for the resolved domains. */
     callable: number
@@ -44,11 +46,8 @@ export interface ZatomWebMcpRuntimeProfile {
     enabled: readonly string[]
     /** Domains that exist but are not callable on this page. */
     disabled: readonly string[]
-    /**
-     * Core and facade descriptors are stable; a disabled domain's calls are
-     * refused with `domain_disabled` without re-registering the page surface.
-     */
-    gating: 'call-time'
+    /** Direct descriptors hot-plug with domains; stale calls also fail closed. */
+    gating: 'descriptor-and-call-time'
   }
   workspace: {
     /** One workspace per document, shared with the human at the keyboard. */
@@ -92,6 +91,7 @@ export function createZatomWebMcpRuntimeProfile(
       available: all.length,
       registered: ZATOM_WEBMCP_REGISTERED_TOOLS.length,
       facade: ZATOM_WEBMCP_FACADE_TOOLS,
+      system: ZATOM_WEBMCP_SYSTEM_TOOLS,
       core: ZATOM_WEBMCP_CORE_TOOLS,
       callable: callable.length,
       readOnly: callable.filter(isReadOnlyTool).length,
@@ -102,7 +102,7 @@ export function createZatomWebMcpRuntimeProfile(
     domains: {
       enabled: domains,
       disabled: ZATOM_TOOL_DOMAINS.map((domain) => domain.name).filter((name) => !enabled.has(name)),
-      gating: 'call-time',
+      gating: 'descriptor-and-call-time',
     },
     workspace: {
       scope: 'shared-active-app',

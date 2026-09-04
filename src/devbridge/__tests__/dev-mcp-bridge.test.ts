@@ -371,6 +371,8 @@ it('routes batch writes to the addressed instance and refuses an ambiguous one',
     authProvider: { token: async () => session.token },
   }))
   try {
+    await client.callTool({ name: 'zatom_enable_domains', arguments: { domains: ['assets'] } })
+
     // Every window owns a separate workspace, so an unaddressed batch write has
     // no single correct destination and must fail rather than pick one.
     const ambiguous = await client.callTool({

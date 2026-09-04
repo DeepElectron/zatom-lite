@@ -1,10 +1,10 @@
 /**
  * Which tool domains this install exposes to agents.
  *
- * WebMCP registers a bounded direct core plus a three-tool facade over the
- * registry. Domains do not change that descriptor surface; they are the user's
- * persistent call-time allowlist. The calling in-page agent can discover
- * disabled domains but cannot enable them itself.
+ * WebMCP keeps a small system facade available and hot-plugs direct
+ * collaboration tools with their domains. These preferences are the user's
+ * persistent base allowlist; temporary once/session grants live in the access
+ * broker and never alter this stored selection.
  *
  * Membership and summaries are NOT duplicated here — they stay in
  * `agent/domains`, which remains the single source of truth. This module only
@@ -14,12 +14,13 @@ import { useCallback, useSyncExternalStore } from 'react'
 
 import { ZATOM_DEFAULT_TOOL_DOMAINS, zatomToolDomainNames } from '../../agent/domains'
 
-// v2 resets installations that persisted the old 11-domain catalogue before
-// `surface` became a default core capability. Keeping the old key would leave
-// the directly visible surface workflow disabled for every existing user.
-export const AGENT_TOOL_DOMAIN_STORAGE_KEY = 'zatom:agent:tool-domains:v2'
+// v3 applies the secure default that keeps bound local assets private from an
+// Agent until the user exposes that domain explicitly.
+export const AGENT_TOOL_DOMAIN_STORAGE_KEY = 'zatom:agent:tool-domains:v3'
 /** Fires (window event) when the selection changes, so mounted panels reload. */
 export const AGENT_TOOL_DOMAINS_CHANGED = 'zatom:agent-tool-domains-changed'
+export const AGENT_WEBMCP_ENABLED_STORAGE_KEY = 'zatom:agent:webmcp-enabled:v1'
+export const AGENT_WEBMCP_ENABLED_CHANGED = 'zatom:agent-webmcp-enabled-changed'
 
 /**
  * `session` is unconditional because it carries core discovery and routing
@@ -62,6 +63,27 @@ export function saveAgentToolDomains(names: readonly string[]): string[] {
   return normalized
 }
 
+export function loadAgentWebMcpEnabled(): boolean {
+  if (typeof window === 'undefined') return true
+  try {
+    return window.localStorage.getItem(AGENT_WEBMCP_ENABLED_STORAGE_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+export function saveAgentWebMcpEnabled(enabled: boolean): boolean {
+  if (typeof window === 'undefined') return enabled
+  try {
+    window.localStorage.setItem(AGENT_WEBMCP_ENABLED_STORAGE_KEY, enabled ? '1' : '0')
+    window.dispatchEvent(new CustomEvent(AGENT_WEBMCP_ENABLED_CHANGED))
+  } catch {
+    // An unavailable preference store must not prevent this page from applying
+    // the user's choice for the current render.
+  }
+  return enabled
+}
+
 /**
  * `useSyncExternalStore` needs a referentially stable snapshot or it re-renders
  * forever, but `loadAgentToolDomains` parses JSON into a fresh array each call.
@@ -92,6 +114,24 @@ function subscribeToSelection(onChange: () => void): () => void {
   }
 }
 
+let cachedWebMcpEnabled = loadAgentWebMcpEnabled()
+
+function readWebMcpEnabledSnapshot(): boolean {
+  const next = loadAgentWebMcpEnabled()
+  if (next !== cachedWebMcpEnabled) cachedWebMcpEnabled = next
+  return cachedWebMcpEnabled
+}
+
+function subscribeToWebMcpEnabled(onChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  window.addEventListener(AGENT_WEBMCP_ENABLED_CHANGED, onChange)
+  window.addEventListener('storage', onChange)
+  return () => {
+    window.removeEventListener(AGENT_WEBMCP_ENABLED_CHANGED, onChange)
+    window.removeEventListener('storage', onChange)
+  }
+}
+
 /** Reads the persisted selection and re-renders when it changes. */
 export function useAgentToolDomains(): {
   domains: readonly string[]
@@ -102,4 +142,20 @@ export function useAgentToolDomains(): {
     saveAgentToolDomains(names)
   }, [])
   return { domains, setDomains }
+}
+
+/** Master switch for the in-page WebMCP surface. Disabling it unregisters every page tool. */
+export function useAgentWebMcpEnabled(): {
+  enabled: boolean
+  setEnabled: (enabled: boolean) => void
+} {
+  const enabled = useSyncExternalStore(
+    subscribeToWebMcpEnabled,
+    readWebMcpEnabledSnapshot,
+    readWebMcpEnabledSnapshot,
+  )
+  const setEnabled = useCallback((next: boolean) => {
+    cachedWebMcpEnabled = saveAgentWebMcpEnabled(next)
+  }, [])
+  return { enabled, setEnabled }
 }

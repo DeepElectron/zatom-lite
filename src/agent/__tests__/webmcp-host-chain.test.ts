@@ -135,13 +135,14 @@ describe('WebMCP host chain', () => {
       trajectoryFingerprint: null,
     }
 
-    // 3. A disabled domain is refused at call time with the way out named —
-    //    the user, in Agent Access — and the agent cannot widen it itself.
+    // 3. A disabled domain is refused at call time with the way out named and
+    //    the denial is recorded so the user can understand the interruption.
     const gated = await call(tools, 'structure_build_metal_cluster', { geometry: 'icosahedral', element: 'Pt', shells: 1 })
     expect(gated.ok).toBe(false)
     expect(gated.error?.code).toBe('domain_disabled')
     expect(gated.error?.message).toMatch(/Agent Access/)
-    expect(calls.some((entry) => entry.tool === 'structure_build_metal_cluster')).toBe(false)
+    expect(calls.find((entry) => entry.tool === 'structure_build_metal_cluster')?.result.error?.code)
+      .toBe('domain_disabled')
 
     // The user enables build + edit: the page re-registers with the new selection.
     registration.unregister()

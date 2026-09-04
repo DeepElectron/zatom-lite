@@ -172,6 +172,7 @@ export function createZatomAgentToolRegistry(
   initial: readonly ZatomToolDefinition[] = [],
 ): ZatomAgentToolRegistry {
   const byName = new Map<string, RegisteredTool>()
+  const protectedNames = new Set(initial.map((tool) => tool.manifest.name))
   const register = (tool: ZatomToolDefinition, options: { replace?: boolean } = {}): (() => void) => {
     const name = tool.manifest.name
     if (!/^[a-z][a-z0-9_]{1,63}$/.test(name)) {
@@ -179,6 +180,9 @@ export function createZatomAgentToolRegistry(
     }
     if (byName.has(name) && !options.replace) {
       throw new Error(`Zatom tool "${name}" is already registered`)
+    }
+    if (byName.has(name) && options.replace && protectedNames.has(name)) {
+      throw new Error(`Built-in zatom tool "${name}" cannot be replaced at runtime; register a namespaced tool or provider capability instead`)
     }
     let validateInput: ZatomJsonSchemaValidator
     try {

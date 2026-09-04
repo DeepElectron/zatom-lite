@@ -816,11 +816,13 @@ export interface ZatomToolContext {
     structure: ZatomStructure,
     expected?: ZatomWorkspaceIdentity,
     signal?: AbortSignal,
+    onCommitStart?: () => void,
   ) => void | Promise<void>
   writeTrajectory?: (
     trajectory: ZatomTrajectory,
     expected?: ZatomWorkspaceIdentity,
     signal?: AbortSignal,
+    onCommitStart?: () => void,
   ) => void | Promise<void>
   /**
    * Atomically replace the complete structure + trajectory workspace.
@@ -836,6 +838,7 @@ export interface ZatomToolContext {
     trajectory: ZatomTrajectory,
     expected?: ZatomWorkspaceIdentity,
     signal?: AbortSignal,
+    onCommitStart?: () => void,
   ) => void | Promise<void>
   focusInspectionTarget?: (
     target: InspectionTarget,

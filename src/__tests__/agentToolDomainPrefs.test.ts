@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { ZATOM_DEFAULT_TOOL_DOMAINS, zatomToolDomainNames } from '../agent/domains'
 import {
   AGENT_TOOL_DOMAIN_STORAGE_KEY,
+  AGENT_WEBMCP_ENABLED_STORAGE_KEY,
+  loadAgentWebMcpEnabled,
   loadAgentToolDomains,
   normalizeAgentToolDomains,
+  saveAgentWebMcpEnabled,
   saveAgentToolDomains,
 } from '../ui/panels/agent-tool-domain-prefs'
 
@@ -57,5 +60,16 @@ describe('agent tool domain preferences', () => {
 
     window.localStorage.setItem(AGENT_TOOL_DOMAIN_STORAGE_KEY, '[1,2,"build"]')
     expect(loadAgentToolDomains()).toEqual(['session', 'build'])
+  })
+})
+
+describe('WebMCP master preference', () => {
+  it('defaults on and persists an explicit stop', () => {
+    window.localStorage.removeItem(AGENT_WEBMCP_ENABLED_STORAGE_KEY)
+    expect(loadAgentWebMcpEnabled()).toBe(true)
+    expect(saveAgentWebMcpEnabled(false)).toBe(false)
+    expect(loadAgentWebMcpEnabled()).toBe(false)
+    expect(saveAgentWebMcpEnabled(true)).toBe(true)
+    expect(loadAgentWebMcpEnabled()).toBe(true)
   })
 })

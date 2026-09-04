@@ -489,6 +489,8 @@ export interface ActiveViewportStructureCommitGuard {
   authorizedProposalId?: string
   /** Request-owned cancellation. Checked before queueing and at the exact CAS boundary. */
   signal?: AbortSignal
+  /** Called after the final pre-write CAS, immediately before canonical state changes. */
+  onCommitStart?: () => void
 }
 
 function throwIfCommitCancelled(signal: AbortSignal | undefined): void {
@@ -617,6 +619,7 @@ export async function commitActiveViewportWorkspace(
     expectedRevision: guard.expectedRevision ?? initialRevision,
     ...(guard.authorizedProposalId ? { authorizedProposalId: guard.authorizedProposalId } : {}),
     ...(guard.signal ? { signal: guard.signal } : {}),
+    ...(guard.onCommitStart ? { onCommitStart: guard.onCommitStart } : {}),
   }
   throwIfCommitCancelled(boundGuard.signal)
   return enqueueCommit(() => commitActiveViewportStructureNow(
@@ -706,7 +709,10 @@ async function commitActiveViewportStructureNow(
     // failed two-part write must leave neither workspace state nor an undo
     // entry claiming that an operation happened.
     await writeViewportStructure(target.api, target.viewportId, structure, {
-      beforeStructureReplace: assertSourceIdentity,
+      beforeStructureReplace: () => {
+        assertSourceIdentity()
+        guard.onCommitStart?.()
+      },
       recordHistory: false,
     })
     if (parsedTrajectory) {
@@ -965,6 +971,7 @@ export async function writeActiveViewportTrajectory(
   value: ZatomTrajectory,
   expected?: ZatomWorkspaceIdentity,
   signal?: AbortSignal,
+  onCommitStart?: () => void,
 ): Promise<void> {
   throwIfCommitCancelled(signal)
   const manager = useViewportManager.getState()
@@ -1007,6 +1014,7 @@ export async function writeActiveViewportTrajectory(
       if (!sameCandidateContinuation) {
         assertAgentMayMutateWorkspaceNow('replace the active trajectory', { signal })
       }
+      onCommitStart?.()
     },
   })
 }
@@ -1227,13 +1235,14 @@ export const activeViewportToolContext: ZatomToolContext = {
    * Agent structure writes use the gated commit path so takeover, review and
    * incremental reveal have one canonical safety boundary for every web host.
    */
-  writeStructure: (structure, expected, signal) => commitActiveViewportStructure(structure, expected ? {
+  writeStructure: (structure, expected, signal, onCommitStart) => commitActiveViewportStructure(structure, expected ? {
     expectedViewportId: expected.viewportId,
     expectedStructureFingerprint: expected.structureFingerprint,
     expectedRevision: expected.revision,
     signal,
-  } : { signal }),
-  writeWorkspace: (structure, trajectory, expected, signal) => commitActiveViewportWorkspace(
+    ...(onCommitStart ? { onCommitStart } : {}),
+  } : { signal, ...(onCommitStart ? { onCommitStart } : {}) }),
+  writeWorkspace: (structure, trajectory, expected, signal, onCommitStart) => commitActiveViewportWorkspace(
     structure,
     trajectory,
     expected ? {
@@ -1241,9 +1250,10 @@ export const activeViewportToolContext: ZatomToolContext = {
       expectedStructureFingerprint: expected.structureFingerprint,
       expectedRevision: expected.revision,
       signal,
-    } : { signal },
+      ...(onCommitStart ? { onCommitStart } : {}),
+    } : { signal, ...(onCommitStart ? { onCommitStart } : {}) },
   ),
-  writeTrajectory: (trajectory, expected, signal) => writeActiveViewportTrajectory(trajectory, expected, signal),
+  writeTrajectory: (trajectory, expected, signal, onCommitStart) => writeActiveViewportTrajectory(trajectory, expected, signal, onCommitStart),
   readViewerScene: () => {
     const api = getActiveViewportStoreApi()
     const pose = getViewportPose(api)

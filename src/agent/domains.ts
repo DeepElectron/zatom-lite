@@ -372,7 +372,7 @@ export const ZATOM_TOOL_DOMAINS: readonly ZatomToolDomain[] = [
     name: 'assets',
     summary: 'Organize saved structures into named batches.',
     tools: ASSETS_TOOLS,
-    enabledByDefault: true,
+    enabledByDefault: false,
   },
   {
     name: 'io',

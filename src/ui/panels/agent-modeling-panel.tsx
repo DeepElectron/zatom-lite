@@ -32,9 +32,10 @@ import { listZatomAgentTools } from '../../agent/tools'
 import { ZATOM_TOOL_DOMAINS, zatomToolDomain, zatomToolDomainNames } from '../../agent/domains'
 import { isReadOnlyTool } from '../../agent/webmcp-adapter'
 import { createZatomWebMcpRuntimeProfile } from '../../agent/webmcp-runtime-profile'
-import { useAgentToolDomains } from './agent-tool-domain-prefs'
+import { useAgentToolDomains, useAgentWebMcpEnabled } from './agent-tool-domain-prefs'
 import { readActiveViewportStructure } from '../../agent/viewer-context'
 import { useActiveCrystalStore as useCrystalStore } from '../../orchestration/ViewportContext'
+import { useWebMcpAccess, webMcpAccessBroker } from '../../orchestration/webMcpAccessStore'
 import {
   Dialog,
   DialogContent,
@@ -106,6 +107,24 @@ const domainByName = new Map(ZATOM_TOOL_DOMAINS.map((domain) => [domain.name, do
 const toolsByDomain = new Map<string, ZatomToolManifest[]>(
   domainOrder.map((name) => [name, manifests.filter((tool) => zatomToolDomain(tool.name) === name)]),
 )
+
+const DOMAIN_ACCESS_BADGE: Readonly<Record<string, string>> = {
+  session: 'observe',
+  guide: 'guide',
+  viewport: 'viewport',
+  assets: 'assets',
+  io: 'structure data',
+  edit: 'modeling',
+  'direct-edit': 'direct apply',
+  surface: 'surface',
+  build: 'builders',
+  trajectory: 'compute',
+  chemstate: 'compute',
+  evidence: 'compute',
+  provider: 'external',
+}
+
+const SENSITIVE_ACCESS_DOMAINS = new Set(['assets', 'direct-edit', 'provider'])
 
 function ModelingWorkflow({ activeIndex, complete, candidate }: { activeIndex: number; complete: boolean; candidate: boolean }) {
   const labels = candidate ? ['Select', 'Configure', 'Run', 'Verify', 'Apply'] : ['Select', 'Configure', 'Run', 'Review']
@@ -351,9 +370,14 @@ export function AgentModelingPanel() {
   const [domainFilter, setDomainFilter] = useState<DomainFilter>('all')
   const [accessExpanded, setAccessExpanded] = useState(false)
   const { domains: enabledDomains, setDomains: setEnabledDomains } = useAgentToolDomains()
+  const { enabled: webMcpEnabled, setEnabled: setWebMcpEnabled } = useAgentWebMcpEnabled()
+  const temporaryOnceDomains = useWebMcpAccess((state) => state.onceDomains)
+  const temporarySessionDomains = useWebMcpAccess((state) => state.sessionDomains)
+  const activeOnceDomains = useWebMcpAccess((state) => state.activeOnceDomains)
+  const exposedDomains = useWebMcpAccess((state) => state.exposedDomains)
   const webMcpProfile = useMemo(
-    () => createZatomWebMcpRuntimeProfile({ domains: enabledDomains }),
-    [enabledDomains],
+    () => createZatomWebMcpRuntimeProfile({ domains: exposedDomains }),
+    [exposedDomains],
   )
   const [libraryExpanded, setLibraryExpanded] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -636,29 +660,91 @@ export function AgentModelingPanel() {
                   Agent access
                 </h3>
                 <p className="mt-0.5" style={{ fontSize: 10, lineHeight: 1.5, color: 'var(--panel-text-tertiary)' }}>
-                  WebMCP exposes {webMcpProfile.tools.core.length} essential tools directly, plus {webMcpProfile.tools.facade.length} discovery tools for the {webMcpProfile.tools.available}-tool registry.
-                  Domains limit what may run, and only you can widen access here.
+                  WebMCP can expose {webMcpProfile.tools.core.length} essential tools directly, plus {webMcpProfile.tools.facade.length} discovery tools and one just-in-time access tool for the {webMcpProfile.tools.available}-tool registry.
+                  Domains limit what may run. An Agent can request missing access in the viewport, but only you can approve it.
                 </p>
               </div>
-              <button
-                type="button"
-                aria-expanded={accessExpanded}
-                onClick={() => setAccessExpanded((value) => !value)}
-                className="zatom-pressable flex min-h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-[10px] font-medium"
-                style={{ color: 'var(--panel-text-secondary)', background: 'var(--panel-bg)', border: '1px solid var(--panel-border)' }}
-              >
-                <ChevronRight className={`h-3 w-3 transition-transform ${accessExpanded ? 'rotate-90' : ''}`} />
-                {accessExpanded ? 'Hide' : 'Configure'}
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={webMcpEnabled}
+                  aria-label="Allow in-page WebMCP agents"
+                  onClick={() => {
+                    if (webMcpEnabled) {
+                      webMcpAccessBroker.setBaseDomains([])
+                      webMcpAccessBroker.clearSession()
+                    }
+                    setWebMcpEnabled(!webMcpEnabled)
+                  }}
+                  className="zatom-pressable flex min-h-8 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-semibold"
+                  style={{
+                    color: webMcpEnabled ? 'var(--status-green)' : 'var(--panel-text-tertiary)',
+                    background: 'var(--panel-bg)',
+                    border: '1px solid var(--panel-border)',
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className="size-1.5 rounded-full"
+                    style={{ background: webMcpEnabled ? 'var(--status-green)' : 'var(--status-neutral)' }}
+                  />
+                  {webMcpEnabled ? 'On' : 'Off'}
+                </button>
+                <button
+                  type="button"
+                  aria-expanded={accessExpanded}
+                  onClick={() => setAccessExpanded((value) => !value)}
+                  className="zatom-pressable flex min-h-8 items-center gap-1 rounded-lg px-2 text-[10px] font-medium"
+                  style={{ color: 'var(--panel-text-secondary)', background: 'var(--panel-bg)', border: '1px solid var(--panel-border)' }}
+                >
+                  <ChevronRight className={`h-3 w-3 transition-transform ${accessExpanded ? 'rotate-90' : ''}`} />
+                  {accessExpanded ? 'Hide' : 'Configure'}
+                </button>
+              </div>
             </div>
 
             <p aria-live="polite" className="mt-2" style={{ fontSize: 10, color: 'var(--panel-text-secondary)' }}>
-              Allowing{' '}
-              <strong style={{ color: 'var(--panel-text)' }}>
-                {webMcpProfile.tools.callable} of {webMcpProfile.tools.available} registry tools
-              </strong>{' '}
-              through {webMcpProfile.tools.registered} stable WebMCP descriptors across {enabledDomains.length} of {domainOrder.length} domains.
+              {webMcpEnabled ? (
+                <>
+                  Allowing{' '}
+                  <strong style={{ color: 'var(--panel-text)' }}>
+                    {webMcpProfile.tools.callable} of {webMcpProfile.tools.available} registry tools
+                  </strong>{' '}
+                  across {exposedDomains.length} of {domainOrder.length} domains. Direct tools appear and disappear as access changes.
+                </>
+              ) : 'Stopped. This page exposes no WebMCP tools until you turn Agent access back on.'}
             </p>
+
+            {temporaryOnceDomains.length > 0 || temporarySessionDomains.length > 0 || activeOnceDomains.length > 0 ? (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Temporary WebMCP access">
+                <span className="text-[9px] font-medium uppercase tracking-wide" style={{ color: 'var(--panel-text-tertiary)' }}>
+                  Temporary
+                </span>
+                {[
+                  ...temporaryOnceDomains.map((domain) => ({ domain, scope: 'once' as const })),
+                  ...activeOnceDomains.map((domain) => ({ domain, scope: 'active' as const })),
+                  ...temporarySessionDomains.map((domain) => ({ domain, scope: 'session' as const })),
+                ].map(({ domain, scope }) => (
+                  <span
+                    key={`${scope}:${domain}`}
+                    className="inline-flex min-h-6 items-center gap-1 rounded-full pl-2 pr-1 text-[9px]"
+                    style={{ color: 'var(--panel-text-secondary)', border: '1px solid var(--panel-border)', background: 'var(--panel-bg)' }}
+                  >
+                    {domain} · {scope}
+                    <button
+                      type="button"
+                      aria-label={`Revoke temporary ${domain} access`}
+                      title={`Revoke ${domain} access now`}
+                      onClick={() => webMcpAccessBroker.revoke(domain)}
+                      className="zatom-pressable flex size-5 items-center justify-center rounded-full"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
 
             {accessExpanded ? (
               <ul className="mt-3 flex flex-col gap-1">
@@ -671,7 +757,8 @@ export function AgentModelingPanel() {
                   // reflects that invariant instead of offering a choice that
                   // would be silently overridden.
                   const locked = name === 'session'
-                  const writeCount = tools.filter((tool) => !isReadOnlyTool(tool)).length
+                  const accessBadge = DOMAIN_ACCESS_BADGE[name] ?? 'capability'
+                  const sensitive = SENSITIVE_ACCESS_DOMAINS.has(name)
                   return (
                     <li key={name}>
                       <button
@@ -681,9 +768,12 @@ export function AgentModelingPanel() {
                         aria-label={`Expose ${name} domain to agents`}
                         disabled={locked}
                         onClick={() => {
-                          setEnabledDomains(on
+                          const nextDomains = on
                             ? enabledDomains.filter((entry) => entry !== name)
-                            : [...enabledDomains, name])
+                            : [...enabledDomains, name]
+                          webMcpAccessBroker.setBaseDomains(nextDomains)
+                          if (on) webMcpAccessBroker.revoke(name)
+                          setEnabledDomains(nextDomains)
                         }}
                         className="zatom-pressable flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left"
                         style={{
@@ -709,11 +799,17 @@ export function AgentModelingPanel() {
                           <span className="flex items-center gap-1.5">
                             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--panel-text)' }}>{name}</span>
                             <span style={{ fontSize: 9, color: 'var(--panel-text-tertiary)' }}>{tools.length} registry tools</span>
-                            {writeCount ? (
-                              <span className="rounded px-1" style={{ fontSize: 8, fontWeight: 650, color: 'var(--status-amber)', background: 'var(--status-amber-bg)' }}>
-                                {writeCount} write
-                              </span>
-                            ) : null}
+                            <span
+                              className="rounded px-1"
+                              style={{
+                                fontSize: 8,
+                                fontWeight: 650,
+                                color: sensitive ? 'var(--status-amber)' : 'var(--panel-text-tertiary)',
+                                background: sensitive ? 'var(--status-amber-bg)' : 'var(--panel-bg)',
+                              }}
+                            >
+                              {accessBadge}
+                            </span>
                             {locked ? (
                               <span className="rounded px-1" style={{ fontSize: 8, fontWeight: 650, color: 'var(--panel-text-tertiary)', background: 'var(--panel-bg)' }}>
                                 always on

@@ -5,8 +5,8 @@
  * `document.modelContext.getTools()` and reaches zatom with no server, port, or
  * transport.
  *
- * The page exposes a stable, curated core directly and keeps the full registry
- * behind a three-tool facade. Browsers cap the total size of a page's tool
+ * The page exposes a curated collaboration core directly and keeps the full
+ * registry behind a three-tool facade. Browsers cap the total size of a page's tool
  * descriptors (Chromium: 64 KiB) and exceed it by refusing the whole set, not
  * by trimming. The registry is several times that size, so registering every
  * tool remains impossible; registering only a compact collaboration path lets
@@ -15,26 +15,29 @@
  * - `zatom_domains`        the collaboration workflow and the tool index
  * - `zatom_describe_tools` full description + input schema for named tools
  * - `zatom_call_tool`      run a registry tool with its input
+ * - `zatom_request_access` ask the human to expose a disabled domain
  *
  * Calls go through `callZatomMcpTool`, so in-page WebMCP and the development CLI
  * bridge observe identical content blocks and `structuredContent`, and the host
  * write-mode policy is applied per call by the canonical registry.
  *
- * Domain gating survives as the user's control over the callable surface. Core
- * descriptors stay registered so the agent can see what Zatom can do, while a
- * call in a disabled domain still fails closed. Domain changes therefore never
- * churn the browser's tool snapshot.
+ * Domain gating controls both discovery and execution. Direct descriptors are
+ * attached only while their domain is exposed, and every call still checks the
+ * live gate so a stale Agent snapshot fails closed. Stable system tools let the
+ * Agent discover the larger surface and request access without a page reload.
  */
 
 import type { JsonValue, ZatomToolContext, ZatomToolManifest, ZatomToolResult } from './contracts'
-import { ZATOM_TOOL_DOMAINS, ZATOM_WORKFLOW, resolveZatomToolDomains, zatomToolDomain, zatomToolTier } from './domains'
+import { ZATOM_TOOL_DOMAINS, ZATOM_WORKFLOW, resolveZatomToolDomains, zatomToolDomain, zatomToolMutatesWorkspace, zatomToolTier } from './domains'
 import { callZatomMcpTool, listZatomMcpTools, type McpToolCallResult, type McpToolDefinition } from './mcp-adapter'
+import { canonicalJsonIdentity } from './structure-math'
 import { activeViewportToolContext } from './viewer-context'
 
 export interface ZatomWebMcpRegistrationOptions {
   /**
    * Domains whose tools may be called. Defaults to the registry's default
-   * domains, matching what a fresh MCP connection sees. Unknown names are
+   * domains, matching what a fresh MCP connection sees. An access broker, when
+   * supplied, is authoritative instead. Unknown names are
    * reported on the handle rather than ignored, so a typo surfaces instead of
    * silently narrowing the surface.
    */
@@ -46,10 +49,11 @@ export interface ZatomWebMcpRegistrationOptions {
    * `exposedTo`. Omitted means same-origin only, per spec default.
    */
   exposedTo?: readonly string[]
-  /** Aborting this unregisters the facade. */
+  /** Aborting this unregisters the complete page surface. */
   signal?: AbortSignal
   /**
-   * Called after every registry tool call made through `zatom_call_tool`.
+   * Called after every direct or facade-routed registry call, including an
+   * early refusal that never reaches the registry.
    * WebMCP has no server process the page could observe, so this is the only
    * place a call becomes visible to the user; the app records it in the Agent
    * Access panel.
@@ -57,6 +61,40 @@ export interface ZatomWebMcpRegistrationOptions {
   onToolCall?: (call: ZatomWebMcpToolCall) => void
   /** Fired before execution so the UI can show live work rather than only a completed log. */
   onToolCallStart?: (call: ZatomWebMcpToolCallStart) => void
+  /** Optional human access broker. When present, it is the authority for exposed domains and call leases. */
+  accessBroker?: ZatomWebMcpAccessBroker
+  /** Reports the live descriptor surface after initial registration and each completed hot-plug update. */
+  onExposureChange?: (registered: readonly string[], domains: readonly string[]) => void
+}
+
+export type ZatomWebMcpAccessDecision = 'once' | 'session' | 'always' | 'deny' | 'timeout' | 'cancelled'
+
+export interface ZatomWebMcpAccessLease {
+  /** Release the grant after this exact call settles. Idempotence is owned by the broker. */
+  release(): void
+}
+
+export interface ZatomWebMcpAccessBroker {
+  /** Domains currently visible to the Agent. `session` is added defensively by the adapter. */
+  getExposedDomains(): readonly string[]
+  /** Notify the adapter after exposure changes. */
+  subscribe(listener: () => void): () => void
+  /** Whether the next one-call lease for this tool is bound to an exact input digest. */
+  requiresInputDigest(request: { domain: string; tool: string }): boolean
+  /** Acquire access for one real tool call. A null lease denies the call. */
+  acquire(request: { domain: string; tool: string; inputDigest?: string; requireOnce?: boolean }): ZatomWebMcpAccessLease | null
+  /** Ask the human for access. The broker owns prompting, expiry, and persistence. */
+  request(request: {
+    domain: string
+    tool: string
+    reason: string
+    inputDigest?: string
+    details?: readonly string[]
+  }, options?: {
+    signal?: AbortSignal
+    timeoutMs?: number
+    forcePrompt?: boolean
+  }): Promise<{ decision: ZatomWebMcpAccessDecision; domain: string }>
 }
 
 export interface ZatomWebMcpToolCallStart {
@@ -67,6 +105,8 @@ export interface ZatomWebMcpToolCallStart {
   input: Record<string, unknown>
   workspace: Awaited<ReturnType<NonNullable<ZatomToolContext['workspaceIdentity']>>> | null
   startedAt: number
+  /** Cancel this exact invocation without revoking the capability. */
+  cancel?: () => void
 }
 
 export interface ZatomWebMcpToolCall {
@@ -77,8 +117,109 @@ export interface ZatomWebMcpToolCall {
   durationMs: number
 }
 
+/**
+ * WebMCP hosts may omit execute options or supply a signal from another realm.
+ * `AbortSignal.any()` rejects either shape, so bridge the minimal EventTarget
+ * contract into a local signal and detach listeners when the call settles.
+ */
+function linkAbortSignals(
+  candidates: readonly (AbortSignal | undefined)[],
+  shouldAbort: () => boolean = () => true,
+): { signal: AbortSignal; dispose(): void } {
+  const controller = new AbortController()
+  const removers: Array<() => void> = []
+  const abortFrom = (source: AbortSignal) => {
+    if (controller.signal.aborted || !shouldAbort()) return
+    try {
+      controller.abort(source.reason)
+    } catch {
+      controller.abort()
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate.addEventListener !== 'function') continue
+    if (candidate.aborted) {
+      abortFrom(candidate)
+      continue
+    }
+    const onAbort = () => abortFrom(candidate)
+    candidate.addEventListener('abort', onAbort, { once: true })
+    removers.push(() => candidate.removeEventListener('abort', onAbort))
+  }
+
+  let disposed = false
+  return {
+    signal: controller.signal,
+    dispose: () => {
+      if (disposed) return
+      disposed = true
+      for (const remove of removers) remove()
+    },
+  }
+}
+
+async function permissionInputDigest(value: unknown): Promise<string> {
+  const subtle = globalThis.crypto?.subtle
+  if (!subtle) throw new Error('This browser cannot bind sensitive access to a SHA-256 input identity')
+  const bytes = new TextEncoder().encode(canonicalJsonIdentity(value))
+  const digest = new Uint8Array(await subtle.digest('SHA-256', bytes))
+  return `sha256:${[...digest].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`
+}
+
+function permissionBoundToolInput(toolName: string, input: Record<string, unknown>): Record<string, unknown> {
+  if (!(ZATOM_WEBMCP_CORE_TOOLS as readonly string[]).includes(toolName)) return input
+  const normalized = { ...input }
+  // Direct descriptors derive these legacy guards from expectedWorkspace.
+  // Bind the canonical user input on both request and execution paths so that
+  // this adapter-only normalization cannot invalidate an approved ticket.
+  for (const field of DIRECT_FINGERPRINT_FIELDS) delete normalized[field]
+  return normalized
+}
+
+function permissionRequestDetails(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  expectedWorkspace: ZatomToolContext['expectedWorkspace'] | null,
+  inputDigest: string,
+): string[] {
+  const canonicalBytes = new TextEncoder().encode(canonicalJsonIdentity(toolInput)).byteLength
+  const fields = Object.keys(toolInput).sort()
+  const details = [
+    `Input: ${canonicalBytes.toLocaleString()} bytes${fields.length ? ` · fields ${fields.join(', ')}` : ' · no fields'}`,
+  ]
+  if (expectedWorkspace) {
+    details.push(
+      `Viewport: ${expectedWorkspace.viewportId} · r${expectedWorkspace.revision} · ${expectedWorkspace.structureFingerprint ?? 'empty'}`,
+    )
+  }
+  if (toolName === 'compute_prepare_boltz_job') {
+    const pipelineId = typeof toolInput.pipelineId === 'string' ? toolInput.pipelineId : 'unknown'
+    const request = toolInput.request && typeof toolInput.request === 'object' && !Array.isArray(toolInput.request)
+      ? toolInput.request as Record<string, unknown>
+      : {}
+    const entities = Array.isArray(request.entities)
+      ? request.entities.length
+      : Array.isArray(request.targetEntities) ? request.targetEntities.length : 0
+    const candidates = Array.isArray(request.smiles)
+      ? request.smiles.length
+      : Array.isArray(request.sequences) ? request.sequences.length : 0
+    details.unshift('Destination: configured Boltz service', `Pipeline: ${pipelineId}`)
+    if (entities || candidates) {
+      details.push(`Scientific payload: ${entities} entit${entities === 1 ? 'y' : 'ies'}${candidates ? ` · ${candidates} candidate${candidates === 1 ? '' : 's'}` : ''}`)
+    }
+  } else if (toolName.startsWith('assets_')) {
+    const relativePath = ['relativePath', 'path', 'fileName']
+      .map((key) => toolInput[key])
+      .find((value): value is string => typeof value === 'string' && value.length > 0)
+    if (relativePath) details.unshift(`Bound-folder file: ${relativePath.slice(0, 160)}`)
+  }
+  details.push(`Approval binding: ${inputDigest.slice(0, 23)}…`)
+  return details.slice(0, 6)
+}
+
 export interface ZatomWebMcpRegistration {
-  /** Core and facade tool names actually registered on the page. */
+  /** Direct, facade, and system tool names actually registered on the page. */
   readonly registered: readonly string[]
   /** Registry tools callable through `zatom_call_tool`, in registry order. */
   readonly callable: readonly string[]
@@ -86,23 +227,25 @@ export interface ZatomWebMcpRegistration {
   readonly unknownDomains: readonly string[]
   /** Domains whose tools are callable. */
   readonly domains: readonly string[]
-  /** Updates callable domains without changing the registered descriptors. */
-  setDomains(domains?: readonly string[]): void
-  /** Unregisters the facade. Idempotent. */
+  /** Atomically updates the call gate, then reconciles direct descriptors. */
+  setDomains(domains?: readonly string[]): Promise<void>
+  /** Unregisters the complete page surface. Idempotent. */
   unregister(): void
 }
 
-/** Long-tail discovery and invocation remain available through these three tools. */
+/** Long-tail discovery and invocation remain available through these three stable tools. */
 export const ZATOM_WEBMCP_FACADE_TOOLS = ['zatom_domains', 'zatom_describe_tools', 'zatom_call_tool'] as const
+
+/** Access negotiation remains present even when every optional domain is hidden. */
+export const ZATOM_WEBMCP_SYSTEM_TOOLS = ['zatom_request_access'] as const
 
 /**
  * The normal human-collaboration path, visible immediately when an agent joins.
  *
- * Keep this list task-level and stable. It intentionally includes the local
- * asset handoff, spatial observation/pointing, safe proposal flow, surface
- * workflow, verification and recovery. Specialist builders and evidence tools
- * stay behind the facade so this list plus its schemas remains below Chromium's
- * 64 KiB per-document descriptor cap.
+ * Keep this list task-level and curated. It includes spatial observation,
+ * pointing, safe proposal flow, surface work, verification, recovery, and the
+ * most common view controls. Local files, external providers, specialist
+ * builders, and evidence tools stay behind the permission-aware facade.
  */
 export const ZATOM_WEBMCP_CORE_TOOLS = [
   'viewer_observe',
@@ -113,7 +256,11 @@ export const ZATOM_WEBMCP_CORE_TOOLS = [
   'viewport_set_layout',
   'viewport_clear_pane',
   'viewer_look_at',
+  'viewer_set_view',
   'viewer_focus_target',
+  'viewer_get_style',
+  'viewer_set_style',
+  'viewer_capture',
   'guide_set_plan',
   'guide_annotate',
   'guide_present_candidates',
@@ -124,23 +271,24 @@ export const ZATOM_WEBMCP_CORE_TOOLS = [
   'structure_measure_geometry',
   'structure_analyze_local_environment',
   'structure_import_text',
-  'assets_list_local_directory',
-  'assets_mount_visualization_bundle',
   'structure_propose_operations',
   'structure_proposal_status',
   'structure_cancel_proposal',
   'workspace_undo',
+  'workspace_redo',
   'structure_check_sanity',
+  'structure_build_miller_slab',
   'surface_prepare_adsorption',
   'structure_place_adsorbate',
   'structure_pose_component',
   'structure_ensure_slab_vacuum',
 ] as const
 
-/** Stable browser descriptor surface: useful immediately, extensible on demand. */
+/** Complete curated catalog; `registration.registered` is the live domain-filtered subset. */
 export const ZATOM_WEBMCP_REGISTERED_TOOLS = [
   ...ZATOM_WEBMCP_CORE_TOOLS,
   ...ZATOM_WEBMCP_FACADE_TOOLS,
+  ...ZATOM_WEBMCP_SYSTEM_TOOLS,
 ] as const
 
 /** Most tools one `zatom_describe_tools` call returns; keeps a single result well under any reader's budget. */
@@ -148,13 +296,13 @@ const MAX_DESCRIBE = 12
 
 /**
  * Registry tools that exist for hosts with per-tool registration and mean
- * nothing behind the facade: the facade has its own `zatom_domains`, and the
- * agent cannot enable domains on this host.
+ * nothing behind the facade: this host has its own discovery and access tools.
  */
 const HIDDEN_FROM_FACADE = new Set(['zatom_domains', 'zatom_enable_domains'])
-const UNTRUSTED_DIRECT_TOOLS = new Set([
-  'assets_list_local_directory',
-  'assets_mount_visualization_bundle',
+
+/** Network-estimate calls need fresh exact-tool consent even if their broad domain is enabled. */
+const EXPLICIT_CALL_GRANT_TOOLS: ReadonlySet<string> = new Set([
+  'compute_prepare_boltz_job',
 ])
 
 /** Single source of truth for the registry tools reachable through the facade. */
@@ -209,6 +357,9 @@ interface FacadeState {
   enabled: ReadonlySet<string>
   byName: ReadonlyMap<string, McpToolDefinition>
   context: ZatomToolContext
+  globalSignal: AbortSignal
+  accessBroker?: ZatomWebMcpAccessBroker
+  activeCalls: Map<string, Set<AbortController>>
   onToolCall: ZatomWebMcpRegistrationOptions['onToolCall']
   onToolCallStart: ZatomWebMcpRegistrationOptions['onToolCallStart']
 }
@@ -232,7 +383,12 @@ function runDomains(state: FacadeState): McpToolCallResult {
       .filter((name) => !HIDDEN_FROM_FACADE.has(name))
       .map((name) => {
         const tool = state.byName.get(name)
-        return { name, title: tool?.title ?? name, readOnly: tool ? isReadOnlyTool(tool) : false }
+        return {
+          name,
+          title: tool?.title ?? name,
+          readOnly: tool ? isReadOnlyTool(tool) : false,
+          requiresOneCallApproval: EXPLICIT_CALL_GRANT_TOOLS.has(name),
+        }
       }),
   }))
   const enabled = domains.filter((domain) => domain.enabled).map((domain) => domain.name)
@@ -242,7 +398,7 @@ function runDomains(state: FacadeState): McpToolCallResult {
     {
       workflow: [...ZATOM_WORKFLOW],
       howToCall:
-        'Core collaboration tools are registered individually and should be called directly. For anything else, zatom_describe_tools(names) returns descriptions/schemas and zatom_call_tool(name,input,expectedWorkspace) runs one. Before anything visual or writable, call viewer_observe and copy data.workspace into expectedWorkspace. Disabled domains are enabled by the user in Agent Access → Tools, not by you.',
+        'Exposed core collaboration tools are registered individually and should be called directly. For anything else, zatom_describe_tools(names) returns descriptions/schemas and zatom_call_tool(name,input,expectedWorkspace) runs one. Before anything visual or writable, call viewer_observe and copy data.workspace into expectedWorkspace. If a required domain is disabled, call zatom_request_access once with the domain, exact next toolInput, expectedWorkspace when applicable, and a short task-specific reason; never loop on denial.',
       domains,
     },
   )
@@ -270,17 +426,17 @@ function runDescribe(state: FacadeState, input: Record<string, unknown>): McpToo
       unknown.push(name)
       continue
     }
-    if (!isCallable(state, name)) {
-      disabled.push(name)
-      continue
-    }
+    const enabled = isCallable(state, name)
+    if (!enabled) disabled.push(name)
     tools.push({
       name: tool.name,
       title: tool.title,
       domain: zatomToolDomain(name),
+      enabled,
       description: tool.description,
       inputSchema: tool.inputSchema,
       readOnly: isReadOnlyTool(tool),
+      requiresOneCallApproval: EXPLICIT_CALL_GRANT_TOOLS.has(name),
       effects: tool.effects,
     })
   }
@@ -297,31 +453,49 @@ function runDescribe(state: FacadeState, input: Record<string, unknown>): McpToo
 async function runCall(
   state: FacadeState,
   input: Record<string, unknown>,
-  executionSignal: AbortSignal,
+  executionSignal: AbortSignal | undefined,
   errorSurface = 'zatom_call_tool',
+  registrationSignal: AbortSignal = state.globalSignal,
 ): Promise<McpToolCallResult> {
+  const startedAt = performance.now()
+  const id = `webmcp-call-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   const name = input.name
+  const rawAuditInput = input.input
+  const auditInput = rawAuditInput && typeof rawAuditInput === 'object' && !Array.isArray(rawAuditInput)
+    ? rawAuditInput as Record<string, unknown>
+    : input
+  const auditName = typeof name === 'string' && name.length > 0 ? name : errorSurface
+  const finish = (result: McpToolCallResult, completedInput: Record<string, unknown> = auditInput) => {
+    state.onToolCall?.({
+      id,
+      tool: auditName,
+      input: completedInput,
+      result: result.structuredContent,
+      durationMs: Math.round(performance.now() - startedAt),
+    })
+    return result
+  }
   if (typeof name !== 'string' || name.length === 0) {
-    return facadeError(errorSurface, 'invalid_input', '`name` must be a tool name from zatom_domains.')
+    return finish(facadeError(errorSurface, 'invalid_input', '`name` must be a tool name from zatom_domains.'))
   }
   const args = input.input
   if (args !== undefined && (typeof args !== 'object' || args === null || Array.isArray(args))) {
-    return facadeError(errorSurface, 'invalid_input', '`input` must be an object matching the tool\'s inputSchema.')
+    return finish(facadeError(errorSurface, 'invalid_input', '`input` must be an object matching the tool\'s inputSchema.'))
   }
   if (!state.byName.has(name) || HIDDEN_FROM_FACADE.has(name)) {
-    return facadeError(errorSurface, 'unknown_tool', `No tool named ${name}. Call zatom_domains for the index.`, { name })
+    return finish(facadeError(errorSurface, 'unknown_tool', `No tool named ${name}. Call zatom_domains for the index.`, { name }))
   }
   const domain = zatomToolDomain(name)
   if (domain === undefined) {
-    return facadeError(errorSurface, 'unknown_tool', `No callable tool named ${name}. Call zatom_domains for the index.`, { name })
+    return finish(facadeError(errorSurface, 'unknown_tool', `No callable tool named ${name}. Call zatom_domains for the index.`, { name }))
   }
   if (!state.enabled.has(domain)) {
-    return facadeError(
+    return finish(facadeError(
       errorSurface,
       'domain_disabled',
-      `${name} is in the ${domain} domain, which is not enabled on this page. The user enables domains in Agent Access → Tools.`,
+      `${name} is in the ${domain} domain, which is not exposed on this page. Call zatom_request_access with this domain and a short reason, or ask the user to enable it in Agent Access.`,
       { name, domain, enabledDomains: [...state.enabled] },
-    )
+    ))
   }
   const toolInput = (args ?? {}) as Record<string, unknown>
   const tool = state.byName.get(name)!
@@ -337,18 +511,25 @@ async function runCall(
     || tool.effects.structure === 'create'
     || tool.effects.structure === 'replace'
   )
+  const mayCommitWorkspace = !candidateOnly && !selectionOnly && (
+    zatomToolMutatesWorkspace(name)
+    || (toolInput.applyToWorkspace === true
+      && (tool.effects.workspace === 'write'
+        || tool.effects.structure === 'create'
+        || tool.effects.structure === 'replace'))
+  )
   const rawExpected = input.expectedWorkspace
   let expectedWorkspace: ZatomToolContext['expectedWorkspace']
   if (rawExpected !== undefined) {
     if (!rawExpected || typeof rawExpected !== 'object' || Array.isArray(rawExpected)) {
-      return facadeError(errorSurface, 'invalid_input', '`expectedWorkspace` must be the identity returned by viewer_observe or workspace_get_active_structure.')
+      return finish(facadeError(errorSurface, 'invalid_input', '`expectedWorkspace` must be the identity returned by viewer_observe or workspace_get_active_structure.'), toolInput)
     }
     const candidate = rawExpected as Record<string, unknown>
     if (typeof candidate.viewportId !== 'string' || !candidate.viewportId
       || !Number.isSafeInteger(candidate.revision) || Number(candidate.revision) < 0
       || (candidate.structureFingerprint !== null && typeof candidate.structureFingerprint !== 'string')
       || (candidate.trajectoryFingerprint !== null && typeof candidate.trajectoryFingerprint !== 'string')) {
-      return facadeError(errorSurface, 'invalid_input', '`expectedWorkspace` is not a complete viewport identity.')
+      return finish(facadeError(errorSurface, 'invalid_input', '`expectedWorkspace` is not a complete viewport identity.'), toolInput)
     }
     expectedWorkspace = {
       viewportId: candidate.viewportId,
@@ -358,12 +539,12 @@ async function runCall(
     }
   }
   if (changesVisibleState && !expectedWorkspace) {
-    return facadeError(
+    return finish(facadeError(
       errorSurface,
       'expected_workspace_required',
       `${name} changes the shared view or workspace. Call viewer_observe, then pass its data.workspace as expectedWorkspace so a pane switch or user edit fails closed.`,
       { name },
-    )
+    ), toolInput)
   }
   let workspace: Awaited<ReturnType<NonNullable<ZatomToolContext['workspaceIdentity']>>> | null = null
   if (state.context.workspaceIdentity) {
@@ -378,49 +559,150 @@ async function runCall(
     || workspace.revision !== expectedWorkspace.revision
     || workspace.structureFingerprint !== expectedWorkspace.structureFingerprint
     || workspace.trajectoryFingerprint !== expectedWorkspace.trajectoryFingerprint)) {
-    return facadeError(
+    return finish(facadeError(
       errorSurface,
       'workspace_conflict',
       `${name} was not run because the active viewport changed after the Agent observed it. Re-observe and retry.`,
       { name, expectedWorkspace: expectedWorkspace as unknown as JsonValue, actualWorkspace: workspace as unknown as JsonValue },
-    )
+    ), toolInput)
   }
-  const startedAt = performance.now()
-  const id = `webmcp-call-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  state.onToolCallStart?.({
-    id,
-    tool: name,
-    title: tool.title ?? name,
-    tier: zatomToolTier(name, toolInput),
-    input: toolInput,
-    workspace,
-    startedAt: Date.now(),
-  })
-  const signal = state.context.signal
-    ? AbortSignal.any([state.context.signal, executionSignal])
-    : executionSignal
+  let boundInputDigest: string | undefined
+  const needsInputDigest = EXPLICIT_CALL_GRANT_TOOLS.has(name)
+    || state.accessBroker?.requiresInputDigest({ domain, tool: name }) === true
+  if (needsInputDigest) {
+    try {
+      boundInputDigest = await permissionInputDigest({
+        toolInput: permissionBoundToolInput(name, toolInput),
+        expectedWorkspace: expectedWorkspace ?? null,
+      })
+    } catch (error) {
+      return finish(facadeError(
+        errorSurface,
+        'access_binding_unavailable',
+        error instanceof Error ? error.message : String(error),
+        { name, domain },
+      ), toolInput)
+    }
+  }
+  if (state.globalSignal.aborted || registrationSignal.aborted || executionSignal?.aborted || state.context.signal?.aborted) {
+    return finish(facadeError(name, 'tool_execution_aborted', 'Tool execution was cancelled before it started.'), toolInput)
+  }
+  let accessLease: ZatomWebMcpAccessLease | null = null
+  if (state.accessBroker) {
+    try {
+      accessLease = state.accessBroker.acquire({
+        domain,
+        tool: name,
+        ...(boundInputDigest ? { inputDigest: boundInputDigest } : {}),
+        ...(EXPLICIT_CALL_GRANT_TOOLS.has(name) ? { requireOnce: true } : {}),
+      })
+    } catch (error) {
+      return finish(facadeError(
+        errorSurface,
+        'access_broker_failed',
+        error instanceof Error ? error.message : String(error),
+        { name, domain },
+      ), toolInput)
+    }
+    if (!accessLease) {
+      const explicitCallGrant = EXPLICIT_CALL_GRANT_TOOLS.has(name)
+      return finish(facadeError(
+        errorSurface,
+        explicitCallGrant ? 'tool_access_required' : 'domain_disabled',
+        explicitCallGrant
+          ? `${name} requires a fresh one-call approval because it can send model data to an external service. Call zatom_request_access for this exact tool before retrying.`
+          : `${name} is no longer authorized in the ${domain} domain. Call zatom_request_access again before retrying.`,
+        { name, domain, enabledDomains: [...state.enabled] },
+      ), toolInput)
+    }
+  }
+  const callController = new AbortController()
+  const domainCalls = state.activeCalls.get(domain) ?? new Set<AbortController>()
+  const hasDeferredCommitBoundary = mayCommitWorkspace
+    && toolInput.applyToWorkspace === true
+    && Boolean(state.context.writeStructure || state.context.writeTrajectory || state.context.writeWorkspace)
+  const cancellableBeforeCommit = !mayCommitWorkspace || hasDeferredCommitBoundary
+  if (cancellableBeforeCommit) {
+    domainCalls.add(callController)
+    state.activeCalls.set(domain, domainCalls)
+  }
+  let commitStarted = mayCommitWorkspace && !hasDeferredCommitBoundary
+  const linkedSignals = linkAbortSignals(cancellableBeforeCommit ? [
+    state.globalSignal,
+    registrationSignal,
+    executionSignal,
+    callController.signal,
+    ...(state.context.signal ? [state.context.signal] : []),
+  ] : [], () => !commitStarted)
+  const signal = linkedSignals.signal
+  const beginCommit = () => {
+    if (signal.aborted) throw new DOMException('Tool execution was cancelled before the workspace commit', 'AbortError')
+    commitStarted = true
+  }
+  const executionContext: ZatomToolContext = hasDeferredCommitBoundary
+    ? {
+        ...state.context,
+        ...(state.context.writeStructure ? {
+          writeStructure: async (structure, expected) => state.context.writeStructure!(
+            structure,
+            expected,
+            signal,
+            beginCommit,
+          ),
+        } : {}),
+        ...(state.context.writeTrajectory ? {
+          writeTrajectory: async (trajectory, expected) => state.context.writeTrajectory!(
+            trajectory,
+            expected,
+            signal,
+            beginCommit,
+          ),
+        } : {}),
+        ...(state.context.writeWorkspace ? {
+          writeWorkspace: async (structure, trajectory, expected) => state.context.writeWorkspace!(
+            structure,
+            trajectory,
+            expected,
+            signal,
+            beginCommit,
+          ),
+        } : {}),
+      }
+    : state.context
   let result: McpToolCallResult
   try {
-    result = await callZatomMcpTool(name, toolInput, {
-      ...state.context,
-      signal,
-      ...(expectedWorkspace ? { expectedWorkspace } : {}),
+    state.onToolCallStart?.({
+      id,
+      tool: name,
+      title: tool.title ?? name,
+      tier: zatomToolTier(name, toolInput),
+      input: toolInput,
+      workspace,
+      startedAt: Date.now(),
+      ...(cancellableBeforeCommit ? { cancel: () => callController.abort() } : {}),
     })
-  } catch (error) {
-    result = facadeError(
-      name,
-      executionSignal.aborted ? 'tool_execution_aborted' : 'tool_execution_failed',
-      executionSignal.aborted ? 'Tool execution was cancelled' : (error instanceof Error ? error.message : String(error)),
-    )
+    try {
+      result = await callZatomMcpTool(name, toolInput, {
+          ...executionContext,
+        signal,
+        ...(expectedWorkspace ? { expectedWorkspace } : {}),
+      })
+    } catch (error) {
+      result = facadeError(
+        name,
+        signal.aborted ? 'tool_execution_aborted' : 'tool_execution_failed',
+        signal.aborted ? 'Tool execution was cancelled' : (error instanceof Error ? error.message : String(error)),
+      )
+    }
+  } finally {
+    if (cancellableBeforeCommit) {
+      domainCalls.delete(callController)
+      if (domainCalls.size === 0) state.activeCalls.delete(domain)
+    }
+    accessLease?.release()
+    linkedSignals.dispose()
   }
-  state.onToolCall?.({
-    id,
-    tool: name,
-    input: toolInput,
-    result: result.structuredContent,
-    durationMs: Math.round(performance.now() - startedAt),
-  })
-  return result
+  return finish(result, toolInput)
 }
 
 const DESCRIPTOR_DOMAINS: Omit<WebMCP.ModelContextTool, 'execute'> = {
@@ -436,7 +718,7 @@ const DESCRIPTOR_DESCRIBE: Omit<WebMCP.ModelContextTool, 'execute'> = {
   name: 'zatom_describe_tools',
   title: 'zatom: describe tools',
   description:
-    `Full description, inputSchema, domain and read-only flag for up to ${MAX_DESCRIBE} named zatom tools. Describe the tools you are about to call; the schema is what zatom_call_tool validates against.`,
+    `Full description, inputSchema, domain, enabled state and read-only flag for up to ${MAX_DESCRIBE} named zatom tools, including tools awaiting permission. Describe the exact next tools before requesting access; the schema is what zatom_call_tool validates against.`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -481,6 +763,281 @@ const DESCRIPTOR_CALL: Omit<WebMCP.ModelContextTool, 'execute'> = {
     additionalProperties: false,
   },
   annotations: { untrustedContentHint: true },
+}
+
+const DESCRIPTOR_REQUEST_ACCESS: Omit<WebMCP.ModelContextTool, 'execute'> = {
+  name: 'zatom_request_access',
+  title: 'zatom: request capability access',
+  description:
+    'Ask the human to expose one Zatom capability without reloading the page. Name the exact next tool, pass its intended toolInput, and give a short task-specific reason. One-call decisions are bound to that tool and input; include expectedWorkspace when the next call uses it. Denial and timeout are normal outcomes.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      domain: {
+        type: 'string',
+        enum: ZATOM_TOOL_DOMAINS.map((domain) => domain.name),
+        description: 'Capability domain from zatom_domains.',
+      },
+      tool: {
+        type: 'string',
+        minLength: 1,
+        description: 'Exact next tool. It must belong to the requested domain; one-call grants are bound to it.',
+      },
+      reason: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 240,
+        description: 'Short user-facing explanation of what the capability is needed for.',
+      },
+      toolInput: {
+        type: 'object',
+        additionalProperties: true,
+        description: 'Exact arguments intended for the next call. One-call approval is bound to these values.',
+      },
+      expectedWorkspace: {
+        type: 'object',
+        additionalProperties: false,
+        description: 'Exact viewer_observe data.workspace intended for the next call. Required for an external request tied to the shared viewport.',
+        properties: {
+          viewportId: { type: 'string', minLength: 1 },
+          revision: { type: 'integer', minimum: 0 },
+          structureFingerprint: { type: ['string', 'null'] },
+          trajectoryFingerprint: { type: ['string', 'null'] },
+        },
+        required: ['viewportId', 'revision', 'structureFingerprint', 'trajectoryFingerprint'],
+      },
+    },
+    required: ['domain', 'tool', 'reason', 'toolInput'],
+    additionalProperties: false,
+  },
+  annotations: { readOnlyHint: false },
+}
+
+const ACCESS_DECISIONS: ReadonlySet<string> = new Set([
+  'once',
+  'session',
+  'always',
+  'deny',
+  'timeout',
+  'cancelled',
+])
+
+function accessWorkspaceIdentity(value: unknown): ZatomToolContext['expectedWorkspace'] | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Record<string, unknown>
+  if (typeof candidate.viewportId !== 'string' || !candidate.viewportId
+    || !Number.isSafeInteger(candidate.revision) || Number(candidate.revision) < 0
+    || (candidate.structureFingerprint !== null && typeof candidate.structureFingerprint !== 'string')
+    || (candidate.trajectoryFingerprint !== null && typeof candidate.trajectoryFingerprint !== 'string')) return null
+  return {
+    viewportId: candidate.viewportId,
+    revision: Number(candidate.revision),
+    structureFingerprint: candidate.structureFingerprint as string | null,
+    trajectoryFingerprint: candidate.trajectoryFingerprint as string | null,
+  }
+}
+
+async function runAccessRequest(
+  state: FacadeState,
+  input: Record<string, unknown>,
+  executionSignal: AbortSignal | undefined,
+  refreshDomains: () => Promise<void>,
+): Promise<McpToolCallResult> {
+  const startedAt = performance.now()
+  const id = `webmcp-call-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  const callController = new AbortController()
+  const linkedSignals = linkAbortSignals([
+    state.globalSignal,
+    executionSignal,
+    callController.signal,
+    ...(state.context.signal ? [state.context.signal] : []),
+  ])
+  const signal = linkedSignals.signal
+  state.onToolCallStart?.({
+    id,
+    tool: 'zatom_request_access',
+    title: DESCRIPTOR_REQUEST_ACCESS.title ?? 'Request capability access',
+    tier: 'read',
+    input,
+    workspace: null,
+    startedAt: Date.now(),
+    cancel: () => callController.abort(),
+  })
+
+  const finish = (result: McpToolCallResult): McpToolCallResult => {
+    linkedSignals.dispose()
+    state.onToolCall?.({
+      id,
+      tool: 'zatom_request_access',
+      input,
+      result: result.structuredContent,
+      durationMs: Math.round(performance.now() - startedAt),
+    })
+    return result
+  }
+
+  const domain = typeof input.domain === 'string' ? input.domain : ''
+  const reason = typeof input.reason === 'string' ? input.reason.trim() : ''
+  const tool = typeof input.tool === 'string' && input.tool.length > 0 ? input.tool : undefined
+  const domainDefinition = ZATOM_TOOL_DOMAINS.find((candidate) => candidate.name === domain)
+  if (!domainDefinition) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'invalid_domain',
+      '`domain` must name a capability returned by zatom_domains.',
+      { domain },
+    ))
+  }
+  if (!reason || reason.length > 240) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'invalid_input',
+      '`reason` must be between 1 and 240 characters.',
+      { domain },
+    ))
+  }
+  if (!tool) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'invalid_input',
+      '`tool` must name the exact next capability call so an Allow once decision cannot be reused for another tool.',
+      { domain },
+    ))
+  }
+  if (!state.byName.has(tool) || zatomToolDomain(tool) !== domain) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'tool_domain_mismatch',
+      `${tool} does not belong to the ${domain} domain. Read zatom_domains and request the matching domain.`,
+      { domain, tool },
+    ))
+  }
+  const requiresFreshCallGrant = EXPLICIT_CALL_GRANT_TOOLS.has(tool)
+  const toolInput = input.toolInput
+  if (!toolInput || typeof toolInput !== 'object' || Array.isArray(toolInput)) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'exact_tool_input_required',
+      '`toolInput` must contain the exact arguments intended for the approved call.',
+      { domain, tool },
+    ))
+  }
+  const expectedWorkspace = input.expectedWorkspace === undefined
+    ? null
+    : accessWorkspaceIdentity(input.expectedWorkspace)
+  if (input.expectedWorkspace !== undefined && !expectedWorkspace) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'invalid_input',
+      '`expectedWorkspace` must be the complete identity returned by viewer_observe.',
+      { domain, tool },
+    ))
+  }
+  if (requiresFreshCallGrant && !expectedWorkspace) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'exact_tool_input_required',
+      `${tool} sends data externally. Pass viewer_observe data.workspace so approval is bound to this model and request.`,
+      { domain, tool },
+    ))
+  }
+  let requestedInputDigest: string
+  try {
+    requestedInputDigest = await permissionInputDigest({
+      toolInput: permissionBoundToolInput(tool, toolInput as Record<string, unknown>),
+      expectedWorkspace,
+    })
+  } catch (error) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'access_binding_unavailable',
+      error instanceof Error ? error.message : String(error),
+      { domain, tool },
+    ))
+  }
+  if (state.enabled.has(domain) && !requiresFreshCallGrant) {
+    return finish(facadeResult(
+      'zatom_request_access',
+      `${domain} access is already exposed. Call${tool ? ` ${tool}` : ' the required tool'} directly.`,
+      { decision: 'already_allowed', domain, ...(tool ? { tool } : {}), exposed: true },
+    ))
+  }
+  if (!state.accessBroker) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'access_request_unavailable',
+      'This page has no interactive access broker. Ask the user to enable the domain in Agent Access.',
+      { domain, ...(tool ? { tool } : {}) },
+    ))
+  }
+  if (signal.aborted) {
+    return finish(facadeResult(
+      'zatom_request_access',
+      `The ${domain} access request was cancelled.`,
+      { decision: 'cancelled', domain, ...(tool ? { tool } : {}), exposed: false },
+    ))
+  }
+
+  let outcome: { decision: ZatomWebMcpAccessDecision; domain: string }
+  try {
+    outcome = await state.accessBroker.request(
+      {
+        domain,
+        tool,
+        reason,
+        inputDigest: requestedInputDigest,
+        details: permissionRequestDetails(tool, toolInput as Record<string, unknown>, expectedWorkspace, requestedInputDigest),
+      },
+      { signal, ...(requiresFreshCallGrant ? { forcePrompt: true } : {}) },
+    )
+  } catch (error) {
+    if (signal.aborted) {
+      return finish(facadeResult(
+        'zatom_request_access',
+        `The ${domain} access request was cancelled.`,
+        { decision: 'cancelled', domain, ...(tool ? { tool } : {}), exposed: false },
+      ))
+    }
+    return finish(facadeError(
+      'zatom_request_access',
+      'access_request_failed',
+      error instanceof Error ? error.message : String(error),
+      { domain, ...(tool ? { tool } : {}) },
+    ))
+  }
+  if (outcome.domain !== domain || !ACCESS_DECISIONS.has(outcome.decision)) {
+    return finish(facadeError(
+      'zatom_request_access',
+      'invalid_access_decision',
+      'The access broker returned an invalid decision.',
+      { domain },
+    ))
+  }
+  if (outcome.decision === 'once' || outcome.decision === 'session' || outcome.decision === 'always') {
+    try {
+      await refreshDomains()
+    } catch (error) {
+      return finish(facadeError(
+        'zatom_request_access',
+        'access_exposure_failed',
+        error instanceof Error ? error.message : String(error),
+        { domain, decision: outcome.decision },
+      ))
+    }
+  }
+  const exposed = state.enabled.has(domain)
+  const summary = outcome.decision === 'deny'
+    ? `The user denied ${domain} access.`
+    : outcome.decision === 'timeout'
+      ? `The ${domain} access request timed out without a decision.`
+      : outcome.decision === 'cancelled'
+        ? `The ${domain} access request was cancelled.`
+        : `${domain} access was granted for ${outcome.decision === 'once' ? 'one tool call' : outcome.decision === 'session' ? 'this page session' : 'future sessions'}.`
+  return finish(facadeResult(
+    'zatom_request_access',
+    summary,
+    { decision: outcome.decision, domain, ...(tool ? { tool } : {}), exposed },
+  ))
 }
 
 const EXPECTED_WORKSPACE_PROPERTY = {
@@ -543,15 +1100,53 @@ function canChangeVisibleState(tool: McpToolDefinition): boolean {
     || tool.effects.structure === 'replace'
 }
 
+/**
+ * These large schemas exceed the browser descriptor budget when every nested
+ * field repeats prose. Their tool-level descriptions and all validation
+ * constraints remain; smaller direct schemas retain their field descriptions.
+ */
+const COMPACT_DIRECT_SCHEMA_TOOLS: ReadonlySet<string> = new Set([
+  'viewer_set_style',
+  'structure_propose_operations',
+  'viewer_look_at',
+  'structure_ensure_slab_vacuum',
+  'scene_resolve_reference',
+  'structure_analyze_local_environment',
+  'structure_place_adsorbate',
+  'surface_prepare_adsorption',
+  'structure_import_text',
+  'structure_select_atoms',
+  'viewer_set_view',
+  'viewport_activate',
+  'structure_pose_component',
+  'structure_build_miller_slab',
+])
+
+function compactDirectSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(compactDirectSchema)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key !== 'description')
+      .map(([key, child]) => [key, compactDirectSchema(child)]),
+  )
+}
+
+function finalizeDirectSchema(tool: McpToolDefinition, schema: Record<string, unknown>): Record<string, unknown> {
+  return COMPACT_DIRECT_SCHEMA_TOOLS.has(tool.name)
+    ? compactDirectSchema(schema) as Record<string, unknown>
+    : schema
+}
+
 /** Add the shared CAS identity without changing the registry tool's own input. */
 function directInputSchema(tool: McpToolDefinition): Record<string, unknown> {
   const projected = projectedDirectSchema(tool)
-  if (!canChangeVisibleState(tool)) return projected
+  if (!canChangeVisibleState(tool)) return finalizeDirectSchema(tool, projected)
   const properties = projected.properties
   if (!properties || typeof properties !== 'object' || Array.isArray(properties)) {
     throw new Error(`zatom: core WebMCP tool ${tool.name} must use an object input schema`)
   }
-  return {
+  return finalizeDirectSchema(tool, {
     ...projected,
     properties: {
       ...(properties as Record<string, unknown>),
@@ -561,10 +1156,11 @@ function directInputSchema(tool: McpToolDefinition): Record<string, unknown> {
       ...(Array.isArray(projected.required) ? projected.required.map(String) : []),
       'expectedWorkspace',
     ],
-  }
+  })
 }
 
 const COMPACT_DIRECT_DESCRIPTIONS: Readonly<Record<string, string>> = {
+  assets_mount_visualization_bundle: 'Validate or mount a bound-folder CUBE/Molden bundle as Density, Density+ESP, or four-pane Density/ESP/HOMO/LUMO. Optional periodic marks CUBE-grid boundary axes; mounts use Keep/Revert review.',
   viewport_clear_pane: 'Clear one exact visible pane while preserving its slot and layout; the user can restore it from the review card.',
   guide_set_plan: 'Show a 1–8 step viewport plan and caption. Re-call with a later activeIndex as work advances; an index past the end marks it done.',
   guide_annotate: 'Label atom IDs or exact 3D points in the active viewport. Use info, target, or warn; IDs update labels in place and replace clears older labels.',
@@ -634,6 +1230,7 @@ function prepareDirectInput(
 function directDescriptor(
   state: FacadeState,
   tool: McpToolDefinition,
+  registrationSignal: AbortSignal,
 ): Omit<WebMCP.ModelContextTool, 'execute'> & { execute: WebMCP.ModelContextTool['execute'] } {
   return {
     name: tool.name,
@@ -642,7 +1239,6 @@ function directDescriptor(
     inputSchema: directInputSchema(tool),
     annotations: {
       readOnlyHint: isReadOnlyTool(tool),
-      ...(UNTRUSTED_DIRECT_TOOLS.has(tool.name) ? { untrustedContentHint: true } : {}),
     },
     execute: (input, options) => {
       const { expectedWorkspace, ...rawToolInput } = input
@@ -652,7 +1248,7 @@ function directDescriptor(
         name: tool.name,
         input: prepared.input,
         ...(expectedWorkspace === undefined ? {} : { expectedWorkspace }),
-      }, options.signal, tool.name)
+      }, options?.signal, tool.name, registrationSignal)
     },
   }
 }
@@ -667,64 +1263,243 @@ export async function registerZatomWebMcpTools(
   }
   const modelContext: WebMCP.ModelContext = candidate
 
-  const { domains, unknown } = resolveZatomToolDomains(options.domains)
-  let unknownDomains = unknown
+  const lifecycleController = new AbortController()
+  const initialRequestedDomains = options.accessBroker
+    ? options.accessBroker.getExposedDomains()
+    : options.domains
+  const initialDomains = resolveZatomToolDomains(initialRequestedDomains)
+  let unknownDomains = initialDomains.unknown
   const all = listZatomMcpTools()
   const state: FacadeState = {
-    enabled: new Set(domains),
+    enabled: new Set(initialDomains.domains),
     byName: new Map(all.map((tool) => [tool.name, tool])),
     context: options.context ?? activeViewportToolContext,
+    globalSignal: lifecycleController.signal,
+    accessBroker: options.accessBroker,
+    activeCalls: new Map(),
     onToolCall: options.onToolCall,
     onToolCallStart: options.onToolCallStart,
   }
 
-  // One controller per registration: WebMCP unregisters only via AbortSignal.
-  // Linking the caller's signal keeps a React effect cleanup or a domain change
-  // as a single abort.
-  const controller = new AbortController()
-  const abort = () => controller.abort()
-  if (options.signal) {
-    if (options.signal.aborted) controller.abort()
-    else options.signal.addEventListener('abort', abort, { once: true })
+  interface DirectRegistration {
+    controller: AbortController
+    signal: AbortSignal
+    domain: string
+    active: boolean
+  }
+  const directRegistrations = new Map<string, DirectRegistration>()
+  const stableRegistered = new Set<string>()
+  let accessUnsubscribe: (() => void) | undefined
+  let unregistered = false
+  let domainRevision = 0
+  let reconcileTail: Promise<void> = Promise.resolve()
+
+  const registerOptions = (signal: AbortSignal): WebMCP.ModelContextRegisterToolOptions => ({
+    signal,
+    ...(options.exposedTo ? { exposedTo: [...options.exposedTo] } : {}),
+  })
+
+  const registeredNames = (): readonly string[] => {
+    if (unregistered || lifecycleController.signal.aborted) return []
+    const direct = ZATOM_WEBMCP_CORE_TOOLS.filter((name) => {
+      const registration = directRegistrations.get(name)
+      return registration?.active === true && !registration.signal.aborted
+    })
+    const stable = [
+      ...ZATOM_WEBMCP_FACADE_TOOLS,
+      ...ZATOM_WEBMCP_SYSTEM_TOOLS,
+    ].filter((name) => stableRegistered.has(name))
+    return [...direct, ...stable]
   }
 
-  const registerOptions: WebMCP.ModelContextRegisterToolOptions = {
-    signal: controller.signal,
-    ...(options.exposedTo ? { exposedTo: [...options.exposedTo] } : {}),
+  const notifyExposureChange = () => {
+    try {
+      options.onExposureChange?.(registeredNames(), [...state.enabled])
+    } catch {
+      // A status observer must never roll back an otherwise valid capability update.
+    }
   }
-  const registered: string[] = []
-  const core = ZATOM_WEBMCP_CORE_TOOLS.map((name) => {
+
+  const abortRevokedDomains = () => {
+    for (const [domain, controllers] of state.activeCalls) {
+      if (state.enabled.has(domain)) continue
+      for (const controller of controllers) controller.abort()
+    }
+    for (const [name, registration] of directRegistrations) {
+      if (state.enabled.has(registration.domain)) continue
+      registration.active = false
+      registration.controller.abort()
+      if (directRegistrations.get(name) === registration) directRegistrations.delete(name)
+    }
+  }
+
+  const registerDirect = async (name: typeof ZATOM_WEBMCP_CORE_TOOLS[number]): Promise<void> => {
+    if (unregistered || lifecycleController.signal.aborted) return
     const tool = state.byName.get(name)
     if (!tool) throw new Error(`zatom: core WebMCP tool ${name} is missing from the registry`)
-    return directDescriptor(state, tool)
-  })
-  const facade: Array<[Omit<WebMCP.ModelContextTool, 'execute'>, WebMCP.ModelContextTool['execute']]> = [
-    [DESCRIPTOR_DOMAINS, () => Promise.resolve(runDomains(state))],
-    [DESCRIPTOR_DESCRIBE, (input) => Promise.resolve(runDescribe(state, input))],
-    [DESCRIPTOR_CALL, (input, options) => runCall(state, input, options.signal)],
-  ]
-  const registrations: WebMCP.ModelContextTool[] = [
-    ...core,
-    ...facade.map(([descriptor, execute]) => ({ ...descriptor, execute })),
-  ]
-  try {
-    if (!controller.signal.aborted) {
-      // Register in one turn so observers receive one useful snapshot instead
-      // of racing sequential await boundaries. Put the direct collaboration
-      // path first so a newly attached Agent sees observe/point/confirm before
-      // the long-tail facade; a shared abort still rolls back every descriptor
-      // if any registration fails.
-      await Promise.all(registrations.map((descriptor) => modelContext.registerTool(descriptor, registerOptions)))
-      if (!controller.signal.aborted) registered.push(...registrations.map((descriptor) => descriptor.name))
+    const domain = zatomToolDomain(name)
+    if (!domain) throw new Error(`zatom: core WebMCP tool ${name} has no domain`)
+    if (!state.enabled.has(domain)) return
+    const existing = directRegistrations.get(name)
+    if (existing && !existing.signal.aborted) return
+
+    const controller = new AbortController()
+    const signal = AbortSignal.any([lifecycleController.signal, controller.signal])
+    const registration: DirectRegistration = { controller, signal, domain, active: false }
+    directRegistrations.set(name, registration)
+    try {
+      await modelContext.registerTool(directDescriptor(state, tool, signal), registerOptions(signal))
+      if (unregistered || signal.aborted || !state.enabled.has(domain)) {
+        controller.abort()
+        if (directRegistrations.get(name) === registration) directRegistrations.delete(name)
+        return
+      }
+      registration.active = true
+    } catch (cause) {
+      const registrationWasAborted = signal.aborted
+      controller.abort()
+      if (directRegistrations.get(name) === registration) directRegistrations.delete(name)
+      if (registrationWasAborted) return
+      throw cause
     }
-  } catch (cause) {
-    options.signal?.removeEventListener('abort', abort)
-    controller.abort()
-    throw cause
+  }
+
+  const reconcileDirectSurface = async (): Promise<void> => {
+    if (unregistered || lifecycleController.signal.aborted) return
+    abortRevokedDomains()
+    const registrations: Promise<void>[] = []
+    for (const name of ZATOM_WEBMCP_CORE_TOOLS) {
+      const domain = zatomToolDomain(name)
+      const existing = directRegistrations.get(name)
+      if (domain && state.enabled.has(domain) && (!existing || existing.signal.aborted)) {
+        registrations.push(registerDirect(name))
+      }
+    }
+    await Promise.all(registrations)
+  }
+
+  const applyResolvedDomains = (
+    resolved: ReturnType<typeof resolveZatomToolDomains>,
+  ): Promise<void> => {
+    if (unregistered) return Promise.resolve()
+    const previousEnabled = state.enabled
+    const previousUnknown = unknownDomains
+    state.enabled = new Set(resolved.domains)
+    unknownDomains = resolved.unknown
+    const revision = ++domainRevision
+    abortRevokedDomains()
+
+    const operation = reconcileTail.then(async () => {
+      if (unregistered || revision !== domainRevision) return
+      try {
+        await reconcileDirectSurface()
+        if (unregistered || revision !== domainRevision) return
+        notifyExposureChange()
+      } catch (cause) {
+        if (unregistered || revision !== domainRevision) throw cause
+        state.enabled = previousEnabled
+        unknownDomains = previousUnknown
+        domainRevision += 1
+        abortRevokedDomains()
+        try {
+          await reconcileDirectSurface()
+          notifyExposureChange()
+        } catch (rollbackCause) {
+          throw new AggregateError([cause, rollbackCause], 'zatom: WebMCP domain update and rollback both failed')
+        }
+        throw cause
+      }
+    })
+    reconcileTail = operation.catch(() => undefined)
+    return operation
+  }
+
+  const refreshDomainsFromBroker = (): Promise<void> => {
+    if (!options.accessBroker) return Promise.resolve()
+    return applyResolvedDomains(resolveZatomToolDomains(options.accessBroker.getExposedDomains()))
+  }
+
+  const stableDescriptors: WebMCP.ModelContextTool[] = [
+    { ...DESCRIPTOR_DOMAINS, execute: () => Promise.resolve(runDomains(state)) },
+    { ...DESCRIPTOR_DESCRIBE, execute: (input) => Promise.resolve(runDescribe(state, input)) },
+    {
+      ...DESCRIPTOR_CALL,
+      execute: (input, executeOptions) => runCall(
+        state,
+        input,
+        executeOptions?.signal,
+        'zatom_call_tool',
+        lifecycleController.signal,
+      ),
+    },
+    {
+      ...DESCRIPTOR_REQUEST_ACCESS,
+      execute: (input, executeOptions) => runAccessRequest(
+        state,
+        input,
+        executeOptions?.signal,
+        refreshDomainsFromBroker,
+      ),
+    },
+  ]
+
+  const registerStable = async (descriptor: WebMCP.ModelContextTool): Promise<void> => {
+    await modelContext.registerTool(descriptor, registerOptions(lifecycleController.signal))
+    if (!unregistered && !lifecycleController.signal.aborted) stableRegistered.add(descriptor.name)
+  }
+
+  const unregisterInternal = () => {
+    if (unregistered) return
+    unregistered = true
+    accessUnsubscribe?.()
+    accessUnsubscribe = undefined
+    if (options.signal) options.signal.removeEventListener('abort', unregisterInternal)
+    for (const registration of directRegistrations.values()) {
+      registration.active = false
+      registration.controller.abort()
+    }
+    for (const controllers of state.activeCalls.values()) {
+      for (const controller of controllers) controller.abort()
+    }
+    state.activeCalls.clear()
+    directRegistrations.clear()
+    lifecycleController.abort()
+    stableRegistered.clear()
+  }
+
+  if (options.signal?.aborted) {
+    unregisterInternal()
+  } else {
+    options.signal?.addEventListener('abort', unregisterInternal, { once: true })
+    try {
+      const initialDirect = ZATOM_WEBMCP_CORE_TOOLS.filter((name) => {
+        const domain = zatomToolDomain(name)
+        return domain !== undefined && state.enabled.has(domain)
+      })
+      await Promise.all([
+        ...initialDirect.map((name) => registerDirect(name)),
+        ...stableDescriptors.map((descriptor) => registerStable(descriptor)),
+      ])
+      if (options.accessBroker && !unregistered) {
+        accessUnsubscribe = options.accessBroker.subscribe(() => {
+          void refreshDomainsFromBroker().catch(() => undefined)
+        })
+        // Re-read after subscribing. A base-domain update may have happened
+        // while the initial registerTool batch was awaiting the browser.
+        await refreshDomainsFromBroker()
+      } else {
+        notifyExposureChange()
+      }
+    } catch (cause) {
+      unregisterInternal()
+      throw cause
+    }
   }
 
   return {
-    registered,
+    get registered() {
+      return registeredNames()
+    },
     get callable() {
       return all.filter((tool) => isCallable(state, tool.name)).map((tool) => tool.name)
     },
@@ -735,13 +1510,8 @@ export async function registerZatomWebMcpTools(
       return [...state.enabled]
     },
     setDomains: (requested) => {
-      const resolved = resolveZatomToolDomains(requested)
-      state.enabled = new Set(resolved.domains)
-      unknownDomains = resolved.unknown
+      return applyResolvedDomains(resolveZatomToolDomains(requested))
     },
-    unregister: () => {
-      options.signal?.removeEventListener('abort', abort)
-      controller.abort()
-    },
+    unregister: unregisterInternal,
   }
 }

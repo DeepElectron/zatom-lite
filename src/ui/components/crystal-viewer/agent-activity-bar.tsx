@@ -19,6 +19,7 @@ export function AgentActivityBar() {
   const caption = useChoreographyNarration((s) => s.caption)
   const activity = useAgentActivity(selectCurrentActivity)
   const skippable = useAgentActivity(selectHasSkippableAnimation)
+  const cancellable = Boolean(activity?.cancel)
 
   const hasActivity = activity !== null
   const [delayPassed, setDelayPassed] = useState(false)
@@ -61,7 +62,7 @@ export function AgentActivityBar() {
         alignItems: 'center',
         gap: 8,
         alignSelf: 'center',
-        padding: skippable ? '5px 6px 5px 14px' : '6px 14px',
+        padding: skippable || cancellable ? '5px 6px 5px 14px' : '6px 14px',
         borderRadius: 999,
         background: 'var(--panel-bg, rgba(28,28,30,0.85))',
         border: '1px solid var(--panel-border, rgba(255,255,255,0.1))',
@@ -70,7 +71,7 @@ export function AgentActivityBar() {
         fontWeight: 500,
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        pointerEvents: skippable ? 'auto' : 'none',
+        pointerEvents: skippable || cancellable ? 'auto' : 'none',
         whiteSpace: 'nowrap',
       }}
     >
@@ -111,6 +112,26 @@ export function AgentActivityBar() {
           }}
         >
           Skip animation
+        </button>
+      ) : null}
+
+      {cancellable ? (
+        <button
+          type="button"
+          onClick={() => activity?.cancel?.()}
+          style={{
+            marginLeft: 4,
+            padding: '3px 10px',
+            borderRadius: 999,
+            border: '1px solid var(--panel-border, rgba(255,255,255,0.18))',
+            background: 'transparent',
+            color: 'inherit',
+            font: 'inherit',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Cancel
         </button>
       ) : null}
 

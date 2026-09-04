@@ -76,7 +76,11 @@ export function summarizeToolArgs(input: unknown): string {
   if (entries.length === 0) return ''
   return entries
     .map(([key, value]) => {
-      if (typeof value === 'string') return `${key}=${value.length > 24 ? `${value.slice(0, 24)}…` : value}`
+      if (typeof value === 'string') {
+        const sensitive = /(?:text|content|body|sequence|path|file|token|key|secret|password|authorization|structure)/i.test(key)
+        if (sensitive) return `${key}=<${value.length} chars>`
+        return `${key}=${value.length > 24 ? `${value.slice(0, 24)}…` : value}`
+      }
       if (typeof value === 'number' || typeof value === 'boolean') return `${key}=${String(value)}`
       if (Array.isArray(value)) return `${key}=[${value.length}]`
       if (value === null) return `${key}=null`

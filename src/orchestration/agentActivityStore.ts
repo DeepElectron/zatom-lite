@@ -35,8 +35,10 @@ export interface RunningAgentActivity {
    * This means "skippable," not "pausable": abortChoreography() immediately settles
    * at the target state without rollback or partial output. Tool calls themselves
    * are not interruptible because aborting a structure write could leave inconsistent state.
-   */
+  */
   interruptible: boolean
+  /** Cancels a safe tool call. Structure commits intentionally omit this. */
+  cancel?: () => void
   host?: 'webmcp' | 'cli-bridge'
   tool?: string
   viewportId?: string
@@ -80,5 +82,5 @@ export function selectCurrentActivity(state: AgentActivityState): RunningAgentAc
  * button must disappear. some() handles either nesting order.
  */
 export function selectHasSkippableAnimation(state: AgentActivityState): boolean {
-  return state.running.some((a) => a.interruptible)
+  return state.running.some((a) => a.interruptible && !a.cancel)
 }

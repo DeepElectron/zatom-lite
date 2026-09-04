@@ -12,7 +12,7 @@ import { initializeAgentModelingRunHistory } from '../ui/panels/agent-modeling-h
 import { initializeAgentModelingTaskPersistence } from '../ui/panels/agent-modeling-task-db'
 import { installScrollOverlay } from '../ui/scroll-overlay'
 import { useZatomWebMcpTools } from '../ui/use-zatom-webmcp-tools'
-import { useAgentToolDomains } from '../ui/panels/agent-tool-domain-prefs'
+import { useAgentToolDomains, useAgentWebMcpEnabled } from '../ui/panels/agent-tool-domain-prefs'
 import { AboutAndLicensesDialog } from '../ui/components/about-and-licenses-dialog'
 import { requiresLegalNoticeAcknowledgement } from '../ui/components/legal-notice-state'
 
@@ -34,6 +34,7 @@ function ZatomApp() {
   const [legalDialogMode, setLegalDialogMode] = useState<'first-run' | 'about' | null>(null)
   const [showBrandCoachmark, setShowBrandCoachmark] = useState(false)
   const { domains: agentDomains } = useAgentToolDomains()
+  const { enabled: webMcpEnabled } = useAgentWebMcpEnabled()
 
   // Install once at the capture phase so individual scroll containers do not
   // need their own overlay integration.
@@ -52,7 +53,9 @@ function ZatomApp() {
   // local workspace opens.
   // Ready: the domains this install exposes, as chosen in Agent Access → Tools
   // and persisted across reloads. Defaults to the registry's default domains.
-  useZatomWebMcpTools(ready ? { domains: agentDomains } : { domains: SESSION_ONLY_DOMAINS })
+  useZatomWebMcpTools(ready
+    ? { enabled: webMcpEnabled, domains: agentDomains }
+    : { enabled: webMcpEnabled, domains: SESSION_ONLY_DOMAINS })
 
   useEffect(() => {
     let active = true

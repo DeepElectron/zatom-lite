@@ -13,6 +13,9 @@ import {
 import { createZatomWebMcpRuntimeProfile } from '../../agent/webmcp-runtime-profile'
 import type { ZatomDiscoveredProviderManifest } from '../../agent/provider'
 import { useHostAccess } from '../../orchestration/hostAccessStore'
+import { selectCurrentActivity, useAgentActivity } from '../../orchestration/agentActivityStore'
+import { selectManualControl, useAgentOperationReview } from '../../orchestration/agentOperationReviewStore'
+import { useWebMcpAccess } from '../../orchestration/webMcpAccessStore'
 import { useAgentToolDomains } from './agent-tool-domain-prefs'
 import { HostWriteModeControl, hostWriteModeBadge } from './host-access-controls'
 
@@ -51,12 +54,47 @@ export function AgentMcpStatusCard({
   const { domains: agentDomains } = useAgentToolDomains()
   const inPage = useMemo(() => createZatomWebMcpRuntimeProfile({ domains: agentDomains }), [agentDomains])
   const webMcpMode = useHostAccess((state) => state.modes.webmcp)
+  const currentAgentActivity = useAgentActivity(selectCurrentActivity)
+  const pendingAccessRequests = useWebMcpAccess((state) => state.pendingRequests.length)
+  const manualControl = useAgentOperationReview(selectManualControl)
   const localStatus = providersStatus === 'loading' || providersStatus === 'idle'
     ? 'Checking…'
     : 'Browser registry'
+  const webMcpPresence = pendingAccessRequests > 0
+    ? { label: 'Waiting for your choice', detail: 'A capability request is open in the shared viewport.', color: 'var(--status-amber)' }
+    : manualControl
+      ? { label: 'Paused — manual control', detail: 'The Agent can observe, but workspace edits stay paused until you hand control back.', color: 'var(--status-amber)' }
+      : currentAgentActivity?.host === 'webmcp'
+        ? { label: 'Agent active now', detail: currentAgentActivity.label, color: 'var(--status-green)' }
+        : inPageAvailable
+          ? { label: 'Ready for Agent', detail: 'In-page tools are ready. This does not imply that an Agent is currently connected.', color: 'var(--status-green)' }
+          : webMcpRegistration.state === 'registering'
+            ? { label: 'Preparing…', detail: 'Registering the current capability surface.', color: 'var(--status-neutral)' }
+            : webMcpRegistration.state === 'error'
+              ? { label: 'Registration failed', detail: webMcpRegistration.error ?? 'The in-page tool surface could not start.', color: 'var(--status-red)' }
+              : { label: 'Stopped', detail: 'This page is not exposing WebMCP tools.', color: 'var(--status-neutral)' }
 
   return (
     <section aria-labelledby="agent-mcp-status-title" className="rounded-xl p-3" style={{ border: '1px solid var(--panel-border)', background: 'var(--panel-bg)' }}>
+      <div
+        aria-label="In-page WebMCP status"
+        className="mb-3 flex items-center gap-2.5 rounded-xl px-3 py-2.5"
+        style={{ border: '1px solid var(--panel-border)', background: 'var(--panel-elevated)' }}
+      >
+        <Globe className="size-4 shrink-0" style={{ color: webMcpPresence.color }} aria-hidden />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-[11px] font-semibold" style={{ color: 'var(--panel-text)' }}>In-page WebMCP</span>
+            <span className="text-[8px] font-bold uppercase tracking-wide" style={{ color: webMcpPresence.color }}>{webMcpPresence.label}</span>
+          </div>
+          <p className="mt-0.5 truncate text-[9px]" title={webMcpPresence.detail} style={{ color: 'var(--panel-text-tertiary)' }}>
+            {webMcpPresence.detail}
+          </p>
+        </div>
+        <span className="shrink-0 text-[8px]" style={{ color: 'var(--panel-text-tertiary)' }}>
+          {webMcpRegistration.registeredTools} tools
+        </span>
+      </div>
       <div className="flex items-center gap-2">
         <Globe className="h-4 w-4 shrink-0" style={{ color: 'var(--control-selected-text)' }} />
         <h3 id="agent-mcp-status-title" style={{ fontSize: 13, fontWeight: 680, color: 'var(--panel-text)' }}>Web Agent Access</h3>
@@ -85,6 +123,7 @@ export function AgentMcpStatusCard({
             <Fact label="Tools registered" value={`${webMcpRegistration.registeredTools}/${inPage.tools.registered}`} />
             <Fact label="Core directly visible" value={inPage.tools.core.length.toLocaleString()} />
             <Fact label="Facade" value={inPage.tools.facade.length.toLocaleString()} />
+            <Fact label="Access handshake" value={inPage.tools.system.length ? 'Available' : 'Unavailable'} />
             <Fact label="Last sync" value={lastRequestLabel(latestWebMcpCall?.at ?? null)} />
           </dl>
           {webMcpRegistration.error ? (
@@ -98,7 +137,7 @@ export function AgentMcpStatusCard({
             <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-1.5"><Users className="h-3 w-3" /> Workspace</span><span>Shared with you</span></div>
           </div>
           <p className="mt-2" style={{ fontSize: 9, lineHeight: 1.45, color: 'var(--panel-text-tertiary)' }}>
-            When registration succeeds, the page exposes {inPage.tools.core.length} essential collaboration tools directly and keeps {inPage.tools.facade.length} facade tools ({inPage.tools.facade.join(', ')}) for the rest of the registry. This stays below the browser&apos;s 64 KiB descriptor cap while avoiding discovery work for ordinary tasks. In total, {inPage.tools.callable.toLocaleString()} of {inPage.tools.available.toLocaleString()} registry tools are callable for the enabled domains; disabled-domain calls fail at execution without changing the stable descriptor set. Visual tools run against the live viewport and share its workspace with you. This host defaults to Propose only: it may build and ghost, you press Apply. Exposure ends on navigation.
+            When registration succeeds, the page exposes the enabled portion of {inPage.tools.core.length} essential collaboration tools directly, keeps {inPage.tools.facade.length} discovery tools for the rest of the registry, and leaves the access handshake available. Direct tools appear or disappear as access changes; stale calls are still rejected at execution. This stays below the browser&apos;s descriptor budget while avoiding discovery work for ordinary tasks. Visual tools run against the live viewport and share its workspace with you. This host defaults to Propose only: it may build and ghost, you press Apply. Exposure ends on navigation.
           </p>
         </div>
       </details>

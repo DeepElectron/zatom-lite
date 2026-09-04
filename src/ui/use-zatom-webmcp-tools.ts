@@ -12,18 +12,19 @@
  *   so cleanup aborts a signal the pass already observes instead of trying to
  *   cancel a promise.
  *
- * The curated core plus three facade descriptors are stable for the document
- * lifetime. Domain changes update their call-time gate in place instead of
- * unregistering and re-registering them; Chromium disables a page after too
- * many tool snapshot changes, so a user toggle must not consume that budget.
+ * The system facade remains stable for the document lifetime. Direct
+ * collaboration tools hot-plug by domain through independent AbortSignals;
+ * the adapter also keeps a call-time gate for stale Agent snapshots.
  */
 
 import { useEffect, useRef } from 'react'
 
 import { activeViewportToolContext } from '../agent/viewer-context'
 import { isWebMcpAvailable, registerZatomWebMcpTools, type ZatomWebMcpRegistration } from '../agent/webmcp-adapter'
+import { ZATOM_DEFAULT_TOOL_DOMAINS } from '../agent/domains'
 import { readHostWriteMode, summarizeToolArgs, useHostAccess } from '../orchestration/hostAccessStore'
 import { useAgentActivity } from '../orchestration/agentActivityStore'
+import { webMcpAccessBroker } from '../orchestration/webMcpAccessStore'
 
 export interface UseZatomWebMcpToolsOptions {
   /** Set false to expose nothing, e.g. behind a user-facing setting. */
@@ -47,6 +48,10 @@ export function useZatomWebMcpTools(options: UseZatomWebMcpToolsOptions = {}): v
 
   useEffect(() => {
     if (!enabled || !isWebMcpAvailable()) {
+      if (!enabled) {
+        webMcpAccessBroker.setBaseDomains([])
+        webMcpAccessBroker.clearSession()
+      }
       useHostAccess.getState().setWebMcpRegistration({
         state: 'unavailable', registeredTools: 0, updatedAt: new Date().toISOString(), error: null,
       })
@@ -55,23 +60,34 @@ export function useZatomWebMcpTools(options: UseZatomWebMcpToolsOptions = {}): v
     useHostAccess.getState().setWebMcpRegistration({
       state: 'registering', registeredTools: 0, updatedAt: new Date().toISOString(), error: null,
     })
+    webMcpAccessBroker.setBaseDomains(domainsRef.current ?? ZATOM_DEFAULT_TOOL_DOMAINS)
     const controller = new AbortController()
     void registerZatomWebMcpTools({
       ...(domainsRef.current ? { domains: domainsRef.current } : {}),
       ...(originKey ? { exposedTo: originKey.split(',') } : {}),
       signal: controller.signal,
+      accessBroker: webMcpAccessBroker,
+      onExposureChange: (registered) => {
+        if (controller.signal.aborted) return
+        useHostAccess.getState().setWebMcpRegistration({
+          state: 'registered',
+          registeredTools: registered.length,
+          updatedAt: new Date().toISOString(),
+          error: null,
+        })
+      },
       // The in-page agent runs in this tab, so it reads the mode directly; the
       // registry consults it per call, so a panel change applies immediately.
       context: {
         ...activeViewportToolContext,
         access: { host: 'webmcp', mode: () => readHostWriteMode('webmcp') },
       },
-      onToolCallStart: ({ id, tool, title, tier, workspace }) => {
-        const verb = tier === 'read' ? 'Checking' : tier === 'compute' ? 'Preparing' : 'Applying'
+      onToolCallStart: ({ id, tool, title, tier, workspace, cancel }) => {
         const end = useAgentActivity.getState().begin({
-          label: `${verb} ${title.toLowerCase()}`,
+          label: title,
           tier: tier === 'read' ? 'observe' : tier,
-          interruptible: false,
+          interruptible: Boolean(cancel),
+          ...(cancel ? { cancel } : {}),
           host: 'webmcp',
           tool,
           ...(workspace ? { viewportId: workspace.viewportId, workspaceRevision: workspace.revision } : {}),
@@ -90,7 +106,9 @@ export function useZatomWebMcpTools(options: UseZatomWebMcpToolsOptions = {}): v
           ok: result.ok,
           ...(result.ok || !result.error ? {} : { error: result.error.message }),
           durationMs,
-          ...(!result.ok && result.error?.code === 'host_policy_denied' ? { deniedByPolicy: true } : {}),
+          ...(!result.ok && ['host_policy_denied', 'domain_disabled', 'tool_access_required'].includes(result.error?.code ?? '')
+            ? { deniedByPolicy: true }
+            : {}),
         })
       },
     }).then((registration) => {
@@ -98,7 +116,6 @@ export function useZatomWebMcpTools(options: UseZatomWebMcpToolsOptions = {}): v
         registration.unregister()
         return
       }
-      registration.setDomains(domainsRef.current)
       registrationRef.current = registration
       useHostAccess.getState().setWebMcpRegistration({
         state: 'registered',
@@ -129,6 +146,6 @@ export function useZatomWebMcpTools(options: UseZatomWebMcpToolsOptions = {}): v
   }, [enabled, originKey])
 
   useEffect(() => {
-    registrationRef.current?.setDomains(domainsRef.current)
-  }, [domainKey])
+    if (enabled) webMcpAccessBroker.setBaseDomains(domainsRef.current ?? ZATOM_DEFAULT_TOOL_DOMAINS)
+  }, [domainKey, enabled])
 }

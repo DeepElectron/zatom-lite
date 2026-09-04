@@ -24,6 +24,7 @@ import { AgentOperationReview } from './components/crystal-viewer/agent-operatio
 import { ManualControlBar } from './components/crystal-viewer/manual-control-bar'
 import { AgentGuidanceStrip } from './components/crystal-viewer/agent-guidance-strip'
 import { AgentProposalCard } from './components/crystal-viewer/agent-proposal-card'
+import { AgentAccessRequestCard } from './components/crystal-viewer/agent-access-request-card'
 import { ViewportContextMenu } from './components/crystal-viewer/viewport-context-menu'
 import { BiomoleculeSequenceStrip } from './components/biomolecule/sequence-strip'
 import { useViewportManager } from '../orchestration/viewportManager'
@@ -583,6 +584,7 @@ export function ModelerView({
           className={`pointer-events-none absolute z-20 flex flex-col items-center gap-2 transition-[left,right,bottom] duration-200 ease-out ${isDark ? 'bottom-8' : 'bottom-4'}`}
           style={{ left: viewportChromeLeft, right: inspectorWidth + 12 }}
         >
+          <AgentAccessRequestCard />
           {/* Agent activity and skip-animation control keep slow tools visibly responsive. */}
           <AgentActivityBar />
           {/* Structure proposal card for applying or discarding the visible ghost preview. */}
