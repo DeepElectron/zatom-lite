@@ -23,7 +23,10 @@ jobs:
           node-version: 24.18.0
           cache: npm
       - run: npm ci
-      - run: npm audit --audit-level=high
+      # Audit the exact locked graph without rebuilding it from node_modules.
+      # Bound registry retries so an advisory outage cannot occupy the runner
+      # for the default five-minute socket timeout before reporting failure.
+      - run: npm audit --package-lock-only --audit-level=high --fetch-timeout=60000 --fetch-retries=2
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
