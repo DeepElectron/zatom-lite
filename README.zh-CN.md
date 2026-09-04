@@ -36,21 +36,17 @@ Zatom 从一个简单的问题出发：当 AI Agent 真正进入科学建模软�
 
 ## 演示视频
 
-两分钟了解我们为什么要做 Zatom。
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="https://i.ytimg.com/vi/zrvn-9GJ6Qs/maxresdefault.jpg" alt="在 YouTube 观看两分钟 Zatom 演示" width="960">
+  </a>
+</p>
 
-<!-- Replace with the final demo video -->
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs"><strong>在 YouTube 观看两分钟演示</strong></a>
+</p>
 
-[观看演示](YOUR_VIDEO_LINK)
-
-<!--
-推荐在这里放一张演示 GIF 或视频封面：
-
-- 分子或晶体三维视窗
-- Agent 正在聚焦某个吸附位点
-- 目标原子高亮
-- 用户输入：the one on the right
-- Agent 实时调整结构
--->
+视频展示了一条共享建模流程：人和 AI Agent 在同一个三维工作空间中指向、选择、调整并确认。
 
 ## 为什么是 Zatom
 

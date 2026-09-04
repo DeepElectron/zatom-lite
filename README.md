@@ -31,21 +31,17 @@ Zatom asks a simple but fundamental question:
 
 ## Demo
 
-Two minutes on why we are building Zatom.
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="https://i.ytimg.com/vi/zrvn-9GJ6Qs/maxresdefault.jpg" alt="Watch the two-minute Zatom demo on YouTube" width="960">
+  </a>
+</p>
 
-<!-- Replace with the final demo video -->
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs"><strong>Watch the 2-minute demo on YouTube</strong></a>
+</p>
 
-[Watch the demo](YOUR_VIDEO_LINK)
-
-<!--
-Suggested demo image or video cover:
-
-- A 3D molecule or crystal viewport
-- An agent focusing on an adsorption site
-- The target atom highlighted
-- The user saying: "the one on the right"
-- The agent adjusting the structure in real time
--->
+The demo follows one shared modeling workflow: a person and an AI agent point, select, adjust, and confirm in the same 3D workspace.
 
 ## Why Zatom?
 

@@ -36,21 +36,17 @@ Zatom は、ひとつの素朴で根本的な問いから始まりました。AI
 
 ## デモ動画
 
-2 分で、私たちが Zatom をつくる理由をご覧いただけます。
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs">
+    <img src="https://i.ytimg.com/vi/zrvn-9GJ6Qs/maxresdefault.jpg" alt="YouTube で 2 分間の Zatom デモを見る" width="960">
+  </a>
+</p>
 
-<!-- Replace with the final demo video -->
+<p align="center">
+  <a href="https://youtu.be/zrvn-9GJ6Qs"><strong>YouTube で 2 分間のデモを見る</strong></a>
+</p>
 
-[デモを見る](YOUR_VIDEO_LINK)
-
-<!--
-ここには、次のような内容が伝わるデモ GIF または動画のサムネイルを置くのがおすすめです。
-
-- 分子または結晶の 3D ビュー
-- Agent が吸着サイトの候補にフォーカスしている場面
-- 対象原子のハイライト
-- ユーザー入力：the one on the right
-- Agent がリアルタイムで構造を調整する場面
--->
+この動画では、人と AI Agent が同じ 3D ワークスペースで指し、選び、調整し、確認する共有モデリングの流れを紹介します。
 
 ## Why Zatom?
 
