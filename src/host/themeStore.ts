@@ -13,7 +13,7 @@ export type Theme = 'light' | 'dark'
 export type Appearance = 'system' | 'viewport' | Theme
 
 /** No stored preference → keep interface chrome coherent with the scientific view. */
-export const DEFAULT_APPEARANCE: Appearance = 'viewport'
+export const DEFAULT_APPEARANCE: Appearance = 'system'
 export const DEFAULT_SYSTEM_THEME: Theme = 'light'
 export const DEFAULT_VIEWPORT_THEME: Theme = 'light'
 
@@ -22,7 +22,6 @@ export const SYSTEM_COLOR_SCHEME_QUERY = '(prefers-color-scheme: dark)'
 // v2 exposed `system` under the label “Auto”. In v3, Auto means viewport-aware;
 // the explicit System choice retains the operating-system behavior.
 const STORAGE_KEY = 'zatom-appearance-v3'
-const LEGACY_STORAGE_KEY = 'zatom-appearance-v2'
 
 type RgbColor = [number, number, number]
 
@@ -274,12 +273,6 @@ function storedAppearance(): Appearance | null {
     const value = localStorage.getItem(STORAGE_KEY)
     if (value === 'system' || value === 'viewport' || value === 'light' || value === 'dark') return value
 
-    // Preserve explicit Light/Dark choices. Both old automatic choices migrate
-    // to the new viewport-aware Auto so a white canvas cannot reopen with dark
-    // chrome merely because the OS is dark.
-    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
-    if (legacy === 'light' || legacy === 'dark') return legacy
-    if (legacy === 'system' || legacy === 'viewport') return 'viewport'
     return null
   } catch {
     // Private-mode Safari and friends throw on localStorage access; a theme is not
@@ -359,4 +352,16 @@ if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
   systemColorScheme.addEventListener('change', (event) => {
     useThemeStore.getState().setSystemTheme(resolveSystemTheme(event.matches))
   })
+}
+
+/** Appearance is a render override; keep the saved Shader palette intact. */
+export function appearanceVisuals<T extends { background: string; cellColor: string }>(
+  visuals: T, theme: Theme | null,
+): T {
+  if (theme === null) return visuals
+  const background = theme === 'dark' ? '#101014' : '#ffffff'
+  const cellColor = visuals.cellColor === '#000000' || visuals.cellColor === '#e6e6ea'
+    ? (theme === 'dark' ? '#e6e6ea' : '#000000') : visuals.cellColor
+  return visuals.background === background && visuals.cellColor === cellColor
+    ? visuals : { ...visuals, background, cellColor }
 }

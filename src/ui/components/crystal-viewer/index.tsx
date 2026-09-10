@@ -7,6 +7,7 @@ import { OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import * as THREE from 'three'
 import { CrystalScene } from './crystal-scene'
 import { AdaptivePerformanceController } from './adaptive-performance-controller'
+import { PeriodicViewControls } from './periodic-view-controls'
 import { CameraController } from './camera-controller'
 import { isBioSelectionReplaceMiss, SelectionBox, SelectionOverlay } from './selection-box'
 import { SurfaceColorBar } from './surface-color-bar'
@@ -425,7 +426,7 @@ export function CrystalViewer() {
 
   return (
     <ViewportContextMenu>
-    <div ref={containerRef}  className="w-full h-full relative select-none">
+    <div ref={containerRef}  className="crystal-viewport w-full h-full relative select-none">
       {/* Keep the canvas mounted in add-atom mode so an empty document can receive its first atom. */}
       {(atoms && atoms.length > 0) || compactStructure || toolMode === 'add-atom' || hasBoundGhostProposal ? (
         <>
@@ -466,6 +467,7 @@ export function CrystalViewer() {
         <EmptyState />
       )}
 
+      <PeriodicViewControls />
     </div>
     </ViewportContextMenu>
   )

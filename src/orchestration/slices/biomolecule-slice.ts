@@ -533,6 +533,7 @@ export const createBiomoleculeSlice: StateCreator<CrystalStore, [], [], Biomolec
       crystalLayers: [],
       builderMode: 'structure',
       periodic: false,
+      showBonds: true,
       showLattice: false,
       unitCellAtoms: [],
       atoms,

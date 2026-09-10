@@ -369,10 +369,11 @@ export function SidebarTabs({
                           Outside cell
                         </span>
                         <SlidingSegmented
+                          allowReselect
                           options={CELL_OVERFLOW_OPTIONS.map((o) => ({ value: o.mode, label: o.label }))}
                           value={cellOverflowMode}
                           onChange={(mode) => {
-                            if (mode === cellOverflowMode) return
+
                             setCellOverflowMode(mode)
                           }}
                           ariaLabel="Cell overflow mode"
@@ -380,6 +381,9 @@ export function SidebarTabs({
                           className="min-w-[164px]"
                         />
                       </div>
+                      <p className="pt-1.5 text-[11px] leading-relaxed" style={{ color: 'var(--panel-text-secondary)' }}>
+                        {CELL_OVERFLOW_OPTIONS.find((option) => option.mode === cellOverflowMode)!.hint}
+                      </p>
                     </div>
                   </div>
                 )}

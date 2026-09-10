@@ -115,6 +115,7 @@ export const createCompactStructureSlice: StateCreator<CrystalStore, [], [], Com
     get().setCompactStructure(compact)
     set({
       periodic: false,
+      showBonds: true,
       atoms: [],
       unitCellAtoms: [],
       bonds: [],

@@ -156,12 +156,14 @@ export function Segmented({
   value,
   onChange,
   bare = false,
+  allowReselect = false,
   ariaLabel = "Options",
 }: {
   options: string[]
   value: string
   onChange: (v: string) => void
   bare?: boolean
+  allowReselect?: boolean
   ariaLabel?: string
 }) {
   if (bare) {
@@ -175,7 +177,7 @@ export function Segmented({
               type="button"
               aria-pressed={active}
               onClick={() => {
-                if (!active) onChange(opt)
+                if (!active || allowReselect) onChange(opt)
               }}
               className="zatom-pressable rounded-lg px-2.5 py-[6px] text-[12px] font-medium"
               style={
@@ -197,6 +199,7 @@ export function Segmented({
       value={value}
       onChange={onChange}
       ariaLabel={ariaLabel}
+      allowReselect={allowReselect}
     />
   )
 }
@@ -220,6 +223,7 @@ export function SlidingSegmented<T extends string>({
   semantics = "radio",
   tabbable = true,
   selectOnPointerEnter = false,
+  allowReselect = false,
   gentleMotion = false,
   className,
   getOptionId,
@@ -232,6 +236,7 @@ export function SlidingSegmented<T extends string>({
   semantics?: "tabs" | "radio"
   tabbable?: boolean
   selectOnPointerEnter?: boolean | number
+  allowReselect?: boolean
   gentleMotion?: boolean
   className?: string
   getOptionId?: (value: T) => string
@@ -281,7 +286,7 @@ export function SlidingSegmented<T extends string>({
   const selectAt = (index: number, focus: boolean) => {
     const next = options[index]
     if (!next) return
-    if (next.value !== value) {
+    if (next.value !== value || allowReselect) {
       onChange(next.value)
     }
     if (focus) {
@@ -395,7 +400,7 @@ export function IconSegmented({
   columns?: number
 }) {
   return (
-    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
+    <div className="grid auto-rows-fr gap-1.5" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
       {options.map(({ label, icon: Icon }) => {
         const active = value === label
         return (
@@ -404,13 +409,14 @@ export function IconSegmented({
             type="button"
             data-no-ripple
             data-selected={active}
+            aria-pressed={active}
             onClick={() => {
               if (!active) onChange(label)
             }}
-            className="zatom-choice zatom-pressable flex flex-col items-center gap-1.5 rounded-xl px-2 py-2.5"
+            className="zatom-choice zatom-pressable flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-2.5"
           >
             <Icon className="h-[18px] w-[18px]" strokeWidth={active ? 2.2 : 1.8} />
-            <span className="text-[10px] font-medium leading-none">{label}</span>
+            <span className="min-w-0 text-[11px] font-medium leading-snug">{label}</span>
           </button>
         )
       })}
@@ -571,6 +577,7 @@ export function SliderRow({
   display,
   accent = "var(--panel-accent)",
   onChange,
+  onCommit,
 }: {
   label: string
   value: number
@@ -580,6 +587,7 @@ export function SliderRow({
   display?: string
   accent?: string
   onChange: (v: number) => void
+  onCommit?: (v: number) => void
 }) {
   const [dragging, setDragging] = useState(false)
   const pct = ((value - min) / (max - min)) * 100
@@ -592,12 +600,12 @@ export function SliderRow({
   const dec = () => {
     const next = clamp(value - step)
     if (next === value) return
-    onChange(next)
+    onChange(next); onCommit?.(next)
   }
   const inc = () => {
     const next = clamp(value + step)
     if (next === value) return
-    onChange(next)
+    onChange(next); onCommit?.(next)
   }
 
   return (
@@ -651,9 +659,10 @@ export function SliderRow({
           onPointerDown={() => {
             setDragging(true)
           }}
-          onPointerUp={() => setDragging(false)}
-          onPointerCancel={() => setDragging(false)}
-          onBlur={() => setDragging(false)}
+          onPointerUp={(e) => { setDragging(false); onCommit?.(Number(e.currentTarget.value)) }}
+          onPointerCancel={(e) => { setDragging(false); onCommit?.(Number(e.currentTarget.value)) }}
+          onBlur={(e) => { setDragging(false); onCommit?.(Number(e.currentTarget.value)) }}
+          onKeyUp={(e) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) onCommit?.(Number(e.currentTarget.value)) }}
           className="zatom-slider"
           style={{ "--slider-fill": `${pct}%`, "--slider-accent": accent } as React.CSSProperties}
         />

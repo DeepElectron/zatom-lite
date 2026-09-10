@@ -1,0 +1,98 @@
+.periodic-view-controls {
+  position: absolute;
+  z-index: 15;
+  top: 44px;
+  right: calc(var(--viewport-chrome-right, 0px) + 12px);
+  display: grid;
+  grid-template-columns: repeat(3, 29px) 25px;
+  grid-template-rows: 21px 18px;
+  gap: 0 1px;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--panel-text) 8%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+  backdrop-filter: blur(12px);
+  color: var(--panel-text);
+  box-shadow: 0 3px 12px rgb(0 0 0 / 5%);
+  opacity: 0;
+  pointer-events: auto;
+  transform: translateY(-3px);
+  transition: opacity 200ms ease-out 160ms, transform 200ms ease-out 160ms;
+}
+
+/* A small local hit area reveals the palette without covering the canvas. */
+.periodic-view-controls::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .periodic-view-controls:hover {
+    opacity: 1;
+    transform: translateY(0);
+    transition-delay: 70ms;
+    pointer-events: auto;
+  }
+}
+
+/* Keyboard focus remains discoverable; mouse focus does not pin the palette. */
+.periodic-view-controls:has(:focus-visible) {
+  opacity: 1;
+  transform: none;
+  transition: none;
+  pointer-events: auto;
+}
+
+.periodic-view-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.periodic-view-controls .periodic-view-axis {
+  background: color-mix(in srgb, var(--panel-text) 4%, transparent);
+}
+.periodic-view-controls .periodic-view-plane {
+  color: var(--panel-text-secondary);
+  font-size: 10px;
+  font-weight: 450;
+}
+.periodic-view-controls .periodic-view-iso {
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 2px;
+  box-shadow: -5px 0 0 -4px color-mix(in srgb, var(--panel-text) 12%, transparent);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .periodic-view-controls button:hover {
+    background: var(--panel-hover);
+    color: var(--panel-text);
+  }
+}
+
+.periodic-view-controls button:active { transform: scale(.96); }
+.periodic-view-controls button:focus-visible { outline: 2px solid var(--panel-text); outline-offset: -2px; }
+
+@media (hover: none) {
+  .periodic-view-controls { opacity: 1; transform: none; pointer-events: auto; grid-template-rows: 36px 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .periodic-view-controls { transition: none; transform: none; }
+  .periodic-view-controls button:active { transform: none; }
+}

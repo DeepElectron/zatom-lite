@@ -5,7 +5,7 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { useThree, useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
-import { useCrystalStore } from '../../../orchestration/crystalStore'
+import { useViewportStore as useCrystalStore } from '../../../orchestration/ViewportContext'
 import { resolveViewportTheme } from '../../../host'
 import { resolveViewportLighting } from '../../../lib/lighting'
 import { ViewportLights } from '../viewport-lights'

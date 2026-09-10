@@ -55,7 +55,7 @@ void main() {
 export const HYPER_STICK_FRAGMENT_SHADER = /* glsl */ `
 uniform vec3 uLight;
 uniform float uHeadlight;
-uniform float uAmbient, uKey, uFill, uShrink;
+uniform float uAmbient, uKey, uFill, uShrink, uBondRadius;
 uniform vec3 uBondColor;
 uniform float uBondBicolor, uSpecular, uShininess, uRim, uOpacity, uMode;
 varying vec3 vWP, vP1, vP2;
@@ -190,27 +190,48 @@ vec4 shadeNpr(vec3 baseColor,vec3 N,vec3 V,vec3 worldPos){
 }
 
 void main(){
-  vec3 ro=cameraPosition,rd=normalize(vWP-ro);
-  // BackSide starts on the far face, so back up beyond the near face with a conservative bound.
-  float maxR=max(vR1,vR2);
-  float t=max(length(vWP-ro)-length(vP2-vP1)-5.*maxR,0.);
+  // Orthographic pixels have parallel rays with distinct origins. Using a
+  // perspective ray here makes each proxy box disagree with its SDF depth.
+  vec3 rd=isOrthographic
+    ? -normalize(vec3(viewMatrix[0][2],viewMatrix[1][2],viewMatrix[2][2]))
+    : normalize(vWP-cameraPosition);
+  vec3 ro=isOrthographic
+    ? vWP-rd*dot(vWP-cameraPosition,rd)
+    : cameraPosition;
+  float maxR=max(vR1,vR2),ar=(vR1+vR2)*.5;
+  // Absolute bond radius is independent of the endpoint atom radii.
+  float shrink=uBondRadius>0.?uBondRadius/ar:uShrink;
+  float surfaceRadius=max(maxR,ar*shrink)+ar*(.3+.7*shrink*shrink)*.5+.002;
+  float tEnd=dot(vWP-ro,rd);
+  // Back faces bound the end of the march. Start ahead of the entire proxy
+  // diagonal, including both smooth-min expansions at high bond thickness.
+  float t=max(tEnd-length(vP2-vP1)-6.*surfaceRadius,0.);
   vec3 hit;bool found=false;
-  // 32 iters w/ step .8 — convergence within tightened bounding box is fine;
-  // dropping from 48 saves ~33% of the dominant fragment cost.
-  for(int i=0;i<32;i++){hit=ro+t*rd;float d=sdf(hit,vP1,vP2,vR1,vR2,uShrink);if(d<.001){found=true;break;}if(d>50.)break;t+=d*.8;}
+  for(int i=0;i<64;i++){
+    if(t>tEnd+.002)break;
+    hit=ro+t*rd;
+    float d=sdf(hit,vP1,vP2,vR1,vR2,shrink);
+    if(d<.001){found=true;break;}
+    t+=d*.8;
+  }
   if(!found)discard;
   float d1=distance(hit,vP1),d2=distance(hit,vP2);
   vec4 hc=vPV*vec4(hit,1.);gl_FragDepth=(hc.z/hc.w)*.5+.5;
   // 4-tap tetrahedral SDF normal — 4 evals instead of the 6-tap central diff.
   vec2 K=vec2(1.0,-1.0);
   vec3 n=normalize(
-    K.xyy*sdf(hit+K.xyy*.002,vP1,vP2,vR1,vR2,uShrink)
-    +K.yyx*sdf(hit+K.yyx*.002,vP1,vP2,vR1,vR2,uShrink)
-    +K.yxy*sdf(hit+K.yxy*.002,vP1,vP2,vR1,vR2,uShrink)
-    +K.xxx*sdf(hit+K.xxx*.002,vP1,vP2,vR1,vR2,uShrink)
+    K.xyy*sdf(hit+K.xyy*.002,vP1,vP2,vR1,vR2,shrink)
+    +K.yyx*sdf(hit+K.yyx*.002,vP1,vP2,vR1,vR2,shrink)
+    +K.yxy*sdf(hit+K.yxy*.002,vP1,vP2,vR1,vR2,shrink)
+    +K.xxx*sdf(hit+K.xxx*.002,vP1,vP2,vR1,vR2,shrink)
   );
   float px1=1.-clamp((d1-vAtomR1)/(vAtomR1*.3),0.,1.),px2=1.-clamp((d2-vAtomR2)/(vAtomR2*.3),0.,1.);
   n=mix(n,normalize(hit-vP1),px1*px1);n=mix(n,normalize(hit-vP2),px2*px2);n=normalize(n);
+  #ifdef HYPER_STICK_NORMAL_PASS
+    // GTAO expects packed view-space normals and the same hit depth as beauty.
+    gl_FragColor=vec4(normalize(mat3(viewMatrix)*n)*.5+.5,1.);
+    return;
+  #endif
   float ex1=max(d1-vAtomR1,0.),ex2=max(d2-vAtomR2,0.);
   float bl=smoothstep(0.,1.,ex2/max(ex1+ex2,.0001));
   vec3 col=mix(vC2,vC1,bl);
@@ -219,10 +240,22 @@ void main(){
     col=mix(col,vC1,px1*px1);
     col=mix(col,vC2,px2*px2);
   }
-  vec3 viewDir=normalize(ro-hit);
+  vec3 viewDir=-rd;
   gl_FragColor=shadeNpr(col,n,viewDir,hit);
 }
 `
+
+/** Convert an absolute bond radius to the SDF ratio without changing atoms. */
+export function resolveHyperStickBondRatio(r1: number, r2: number, stickScale: number, bondRadius: number | null): number {
+  return bondRadius === null ? stickScale : bondRadius / ((r1 + r2) * .5)
+}
+
+/** Conservative capsule radius including both smooth-min expansions. */
+export function hyperStickSurfaceRadius(r1: number, r2: number, stickScale: number): number {
+  const average = (r1 + r2) * .5
+  const smoothing = average * (.3 + .7 * stickScale * stickScale)
+  return Math.max(r1, r2, average * stickScale) + smoothing * .5 + .002
+}
 
 const UNIT_Z = new THREE.Vector3(0, 0, 1)
 const BOX_GEOMETRY_ARGS: [number, number, number] = [1, 1, 1]
@@ -280,7 +313,6 @@ function buildInstanceFrames(
     }
     const r1 = resolveHyperStickAtomRadius(e1.radius, atomScale, a1.id, presentation, atomRadiusByAtomId)
     const r2 = resolveHyperStickAtomRadius(e2.radius, atomScale, a2.id, presentation, atomRadiusByAtomId)
-    const maxRadius = Math.max(r1, r2)
 
     const midpoint = new THREE.Vector3(
       (tmpP1.x + tmpP2.x) * 0.5,
@@ -295,13 +327,13 @@ function buildInstanceFrames(
     const c2 = tmpColor.setStyle(colorByAtomId?.get(a2.id) ?? e2.color, THREE.NoColorSpace)
     const c2r = c2.r, c2g = c2.g, c2b = c2.b
 
-    const surfaceRadius = maxRadius * Math.max(1, stickScale)
+    const surfaceRadius = hyperStickSurfaceRadius(r1, r2, resolveHyperStickBondRatio(r1, r2, stickScale, bondRadius))
     out.push({
       midpoint,
       quaternion,
-      scaleX: surfaceRadius * 2.5,
-      scaleY: surfaceRadius * 2.5,
-      scaleZ: length + surfaceRadius * 2.5,
+      scaleX: surfaceRadius * 2,
+      scaleY: surfaceRadius * 2,
+      scaleZ: length + surfaceRadius * 2,
       p1x: tmpP1.x, p1y: tmpP1.y, p1z: tmpP1.z,
       p2x: tmpP2.x, p2y: tmpP2.y, p2z: tmpP2.z,
       c1r, c1g, c1b, c2r, c2g, c2b,
@@ -542,6 +574,7 @@ export function HyperStickBonds({ atoms, bonds, atomScale, renderOverride }: {
       uKey: { value: 0 },
       uFill: { value: 0 },
       uShrink: { value: 0.45 },
+      uBondRadius: { value: -1 },
       uBondColor: { value: new THREE.Color() },
       uBondBicolor: { value: 1 },
       uSpecular: { value: 0.6 },
@@ -552,6 +585,16 @@ export function HyperStickBonds({ atoms, bonds, atomScale, renderOverride }: {
     }),
     [],
   )
+
+  const occlusionNormalMaterial = useMemo(() => new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: VERT,
+    fragmentShader: HYPER_STICK_FRAGMENT_SHADER,
+    defines: { HYPER_STICK_NORMAL_PASS: 1 },
+    side: THREE.BackSide,
+    blending: THREE.NoBlending,
+  }), [uniforms])
+  useEffect(() => () => occlusionNormalMaterial.dispose(), [occlusionNormalMaterial])
 
   // Push per-instance buffers + transforms whenever the bond topology changes.
   // Instance count is keyed off the `<instancedMesh args=…>` so R3F recreates
@@ -615,6 +658,7 @@ export function HyperStickBonds({ atoms, bonds, atomScale, renderOverride }: {
     uniforms.uKey.value = lighting.key
     uniforms.uFill.value = lighting.fill
     uniforms.uShrink.value = presentation.stickScale
+    uniforms.uBondRadius.value = presentation.bondRadius ?? -1
     uniforms.uBondColor.value.setStyle(bondColor, THREE.NoColorSpace)
     uniforms.uBondBicolor.value = renderOverride?.colorByAtomId || bondBicolor ? 1 : 0
     uniforms.uSpecular.value = renderOverride?.specularStrength ?? specularIntensity
@@ -626,13 +670,14 @@ export function HyperStickBonds({ atoms, bonds, atomScale, renderOverride }: {
       materialRef.current.uniformsNeedUpdate = true
     }
     invalidate()
-  }, [atomShininess, bondBicolor, bondColor, headlight, invalidate, lightDir, lighting, presentation.opacity, presentation.stickScale, renderOverride?.colorByAtomId, renderOverride?.fresnel, renderOverride?.shininess, renderOverride?.specularStrength, rimIntensity, shadingMode, specularIntensity, uniforms])
+  }, [atomShininess, bondBicolor, bondColor, headlight, invalidate, lightDir, lighting, presentation.bondRadius, presentation.opacity, presentation.stickScale, renderOverride?.colorByAtomId, renderOverride?.fresnel, renderOverride?.shininess, renderOverride?.specularStrength, rimIntensity, shadingMode, specularIntensity, uniforms])
 
   if (frames.length === 0) return null
 
   return (
     <instancedMesh
       ref={meshRef}
+      userData={{ occlusionNormalMaterial }}
       args={[undefined, undefined, frames.length]}
       frustumCulled={false}
       raycast={() => {}}

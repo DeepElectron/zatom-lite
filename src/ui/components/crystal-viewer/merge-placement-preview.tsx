@@ -7,7 +7,6 @@ import * as THREE from 'three'
 import { useViewportStore as useCrystalStore } from '../../../orchestration/ViewportContext'
 import { getElement } from '../../../lib/crystal/elements'
 import { analyzeMergeBoundary } from '../../../lib/crystal/merge-boundary'
-import { boundaryModeFor } from '../../../lib/crystal/cell-overflow'
 import { calculateVolume } from '../../../lib/crystal/lattice'
 
 const WARN_COLORS = { tooClose: '#FF453A', wrap: '#FF9F0A', extend: '#64D2FF' } as const
@@ -83,7 +82,6 @@ function PreviewInner() {
   const periodic = useCrystalStore((s) => s.periodic)
   const atoms = useCrystalStore((s) => s.atoms)
   const cellOverflowMode = useCrystalStore((s) => s.cellOverflowMode)
-  const boundaryMode = boundaryModeFor(cellOverflowMode)
   const report = useMemo(() => analyzeMergeBoundary(
     atomOffsets.map(({ offset }) => [
       position[0] + offset[0],
@@ -95,8 +93,7 @@ function PreviewInner() {
     periodicDirs,
     periodic,
     atoms.map((a) => (a.cartesian ?? a.position) as [number, number, number]),
-    boundaryMode,
-  ), [atomOffsets, position, latticeVectors, supercellParams, periodicDirs, periodic, atoms, boundaryMode])
+  ), [atomOffsets, position, latticeVectors, supercellParams, periodicDirs, periodic, atoms])
 
   const gridPositions = useMemo(() => {
     if (!periodic || calculateVolume(latticeVectors) < 1e-9) return null
@@ -160,6 +157,9 @@ function PreviewInner() {
   return (
     <>
       {atomOffsets.map((a, i) => {
+        const displayed: [number, number, number] = cellOverflowMode === 'tile-images'
+          ? [position[0] + a.offset[0] + report.shift[0], position[1] + a.offset[1] + report.shift[1], position[2] + a.offset[2] + report.shift[2]]
+          : report.finalPositions[i]
         const el = getElement(a.element)
         const warn = report.tooClose[i]
           ? WARN_COLORS.tooClose
@@ -169,7 +169,7 @@ function PreviewInner() {
               ? WARN_COLORS.extend
               : null
         return (
-          <mesh key={i} position={report.finalPositions[i]} renderOrder={15}>
+          <mesh key={i} position={displayed} renderOrder={15}>
             <sphereGeometry args={[el.radius * 0.5, 20, 20]} />
             <meshStandardMaterial
               color={warn ?? el.color}
@@ -183,7 +183,7 @@ function PreviewInner() {
         )
       })}
       {atomOffsets.map((a, i) => {
-        if (report.atomStatus[i] !== 'wrap') return null
+        if (cellOverflowMode === 'tile-images' || report.atomStatus[i] !== 'wrap') return null
         const raw: [number, number, number] = [
           position[0] + a.offset[0],
           position[1] + a.offset[1],

@@ -16,7 +16,6 @@ import type { StateCreator } from 'zustand'
 import type { CrystalStore } from '../crystal-store-types'
 import type { GroupAtomInput } from './structure-groups-slice'
 import { analyzeMergeBoundary, wrapAnchorIntoBox } from '../../lib/crystal/merge-boundary'
-import { boundaryModeFor } from '../../lib/crystal/cell-overflow'
 
 export interface MergePlacementState {
   name: string
@@ -65,16 +64,14 @@ export const createMergePlacementSlice: StateCreator<CrystalStore, [], [], Merge
             input.cartesian[2] - centroid[2],
           ],
         })),
-        // In 'fold-in' mode, wrap the heuristic initial anchor (for example maxZ + 3)
-        // into the cell to avoid entering placement with an out-of-cell anchor.
-        // Other modes preserve the anchor for WYSIWYG placement; tile-images wraps on commit.
-        position: wrapAnchorIntoBox(
+
+
+        position: get().cellOverflowMode === 'tile-images' ? initialPosition : wrapAnchorIntoBox(
           initialPosition,
           get().latticeVectors,
           get().supercellParams,
           get().periodicDirs,
           get().periodic,
-          get().cellOverflowMode === 'fold-in' ? 'wrap' : 'extend',
         ),
         step: 'xy',
       },
@@ -87,12 +84,12 @@ export const createMergePlacementSlice: StateCreator<CrystalStore, [], [], Merge
     // In 'fold-in', wrap the anchor along periodic axes just like individual atoms;
     // otherwise the cursor could remain outside while the molecule appears inside.
     // The wrapped position is the shared source of truth for preview, HUD, and commit.
-    // Do not wrap in 'grow-cell' or 'tile-images', which would teleport an out-of-cell ghost.
+    // Preserve the dragged image in tile-images mode so an outside ghost does not jump.
     const { latticeVectors, supercellParams, periodicDirs, periodic, cellOverflowMode } = get()
-    // 'tile-images' also keeps the anchor unwrapped during placement. Data wraps on commit
-    // through confirmMergePlacement -> analyzeMergeBoundary, so the ghost follows the cursor.
-    const anchorMode = cellOverflowMode === 'fold-in' ? 'wrap' : 'extend'
-    const anchor = wrapAnchorIntoBox(position, latticeVectors, supercellParams, periodicDirs, periodic, anchorMode)
+
+
+    const anchor = cellOverflowMode === 'tile-images' ? position
+      : wrapAnchorIntoBox(position, latticeVectors, supercellParams, periodicDirs, periodic)
     set({ mergePlacement: { ...current, position: anchor } })
   },
 
@@ -126,8 +123,7 @@ export const createMergePlacementSlice: StateCreator<CrystalStore, [], [], Merge
       return
     }
 
-    // Match preview feedback at commit: 'extend' grows the cell around the fragment at its
-    // current position, while 'wrap' folds it back along periodic axes.
+    // Keep every periodic axis fixed; only an open axis can receive vacuum padding.
     const report = analyzeMergeBoundary(
       worldPositions,
       latticeVectors,
@@ -135,10 +131,9 @@ export const createMergePlacementSlice: StateCreator<CrystalStore, [], [], Merge
       periodicDirs,
       periodic,
       atoms.map((a) => (a.cartesian ?? a.position) as [number, number, number]),
-      boundaryModeFor(get().cellOverflowMode),
-    )
+      )
 
-    // One history transaction captures the pre-merge state, including Base creation and cell growth.
+
     get().pushHistory()
     for (const { axis, newUnitLength } of report.extendAxes) {
       get().resizeLatticeAxis(axis, newUnitLength, false)
@@ -148,10 +143,12 @@ export const createMergePlacementSlice: StateCreator<CrystalStore, [], [], Merge
       current.name,
       current.atomOffsets.map(({ element }, i) => ({
         element,
-        cartesian: report.finalPositions[i],
+        cartesian: worldPositions[i].map((value, axis) => value + report.shift[axis]) as [number, number, number],
       })),
     )
-    // Photoshop-style behavior: the new layer becomes active.
+    // Canonicalize with the same rule as dragging, retaining Images offsets.
+    get().applyBoundaryToAtoms(get().atoms.filter(atom => atom.groupId === groupId).map(atom => atom.id))
+
     set({ mergePlacement: null, activeGroupId: groupId })
   },
 

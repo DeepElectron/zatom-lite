@@ -50,7 +50,8 @@ export function AtomDragHandler() {
         const anchorArr = s.draggingAtomAnchor ?? start
         drag.id = id
         drag.anchor = anchorArr ? new THREE.Vector3(anchorArr[0], anchorArr[1], anchorArr[2]) : null
-        drag.startCartesian = start ?? null
+        drag.startCartesian = s.cellOverflowMode === 'tile-images' ? anchorArr ?? null : start ?? null
+
         drag.group = s.selectedAtomIds.has(id) && s.selectedAtomIds.size >= 2
         drag.pushed = false
       }

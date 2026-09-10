@@ -3,7 +3,7 @@
  * The error boundary keeps non-WebGL controls available when 3D initialization fails.
  */
 import React, { useEffect, useState } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 
 import { ModelerView } from '../ui/ModelerView'
 import { setWorkspaceLayersHook } from '../host'
@@ -111,7 +111,9 @@ function ZatomApp() {
   )
 }
 
-createRoot(container).render(
+const rootContainer = container as HTMLElement & { zatomReactRoot?: Root }
+const root = rootContainer.zatomReactRoot ??= createRoot(container)
+root.render(
   <React.StrictMode>
     <AppErrorBoundary>
       <ZatomApp />

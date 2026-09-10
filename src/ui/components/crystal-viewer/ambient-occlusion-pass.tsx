@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { ACESFilmicToneMapping, NoToneMapping, type Object3D, type Scene } from 'three'
+import { ACESFilmicToneMapping, NoToneMapping, Color, type Material, type Mesh, type Object3D, type Scene } from 'three'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js'
@@ -22,6 +22,12 @@ function applyCameraProjectionDefine(pass: GTAOPass, isPerspective: boolean): vo
 }
 
 function isNonSurfaceObject(object: Object3D): boolean {
+  const material = (object as Mesh).material
+  const materials = Array.isArray(material) ? material : material ? [material] : []
+  // Invisible picking meshes and translucent overlays must not become opaque
+  // occluders when the normal pass replaces their materials.
+  if (materials.length && materials.every((m) => !m.visible || m.opacity <= 0 || !m.depthWrite)) return true
+
   const probe = object as Object3D & {
     isSprite?: boolean
     isLine?: boolean
@@ -32,6 +38,44 @@ function isNonSurfaceObject(object: Object3D): boolean {
   return Boolean(
     probe.isSprite || probe.isLine || probe.isLine2 || probe.isLineSegments2 || probe.isPoints,
   )
+}
+
+/** Preserve procedural surfaces in the normal pass instead of drawing their proxy boxes. */
+export function withOcclusionMaterials(scene: Scene, normalMaterial: Material, render: () => void): void {
+  const saved: Array<[Mesh, Material | Material[]]> = []
+  const override = scene.overrideMaterial
+  scene.traverseVisible((object) => {
+    const mesh = object as Mesh
+    if (mesh.isMesh) saved.push([mesh, mesh.material])
+  })
+  try {
+    scene.overrideMaterial = null
+    for (const [mesh] of saved) mesh.material = mesh.userData.occlusionNormalMaterial ?? normalMaterial
+    render()
+  } finally {
+    for (const [mesh, material] of saved) mesh.material = material
+    scene.overrideMaterial = override
+  }
+}
+
+function configureSurfaceNormals(pass: GTAOPass, scene: Scene): void {
+  pass.renderOverride = (renderer, normalMaterial, target, clearColor, clearAlpha) => {
+    const previousColor = renderer.getClearColor(new Color())
+    const previousAlpha = renderer.getClearAlpha()
+    const previousAutoClear = renderer.autoClear
+    const previousTarget = renderer.getRenderTarget()
+    try {
+      renderer.setRenderTarget(target)
+      renderer.autoClear = false
+      renderer.setClearColor(clearColor ?? 0x7777ff, clearAlpha ?? 1)
+      renderer.clear()
+      withOcclusionMaterials(scene, normalMaterial, () => renderer.render(scene, pass.camera))
+    } finally {
+      renderer.setRenderTarget(previousTarget)
+      renderer.autoClear = previousAutoClear
+      renderer.setClearColor(previousColor, previousAlpha)
+    }
+  }
 }
 
 export function excludeNonSurfacesFromOcclusion(
@@ -78,6 +122,7 @@ function AmbientOcclusionComposer({
     const gtao = new GTAOPass(scene, camera, size.width, size.height)
     gtao.updateGtaoMaterial({ screenSpaceRadius: true, radius: 18, scale: 1, thickness: 1 })
     excludeNonSurfacesFromOcclusion(gtao, scene)
+    configureSurfaceNormals(gtao, scene)
     instance.addPass(gtao)
     // OutputPass performs the render-target color-space conversion. Tone mapping
     // is scoped around render below because OutputPass reads the renderer each frame.

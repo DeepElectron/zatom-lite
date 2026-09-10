@@ -159,7 +159,7 @@ export function PeriodicImageAtoms({ viewMode, scale, renderOverride, hiddenAtom
           atom={atom}
           viewMode={viewMode}
           scale={scale}
-          renderOverride={renderOverride}
+          renderOverride={{ ...renderOverride, opacity: (renderOverride?.opacity ?? 1) * 0.35 }}
           focusDisplayPosition={(atom.cartesian ?? atom.position) as Vec3}
           isPeriodicImage
         />
