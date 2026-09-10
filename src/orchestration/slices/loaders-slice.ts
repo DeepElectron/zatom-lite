@@ -93,7 +93,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
     }
     return result
   },
-  
+
   loadFromCIF: async (cifContent, options) => {
     const manageProgress = shouldShowStructureProcessingForText(cifContent)
     if (manageProgress) {
@@ -107,7 +107,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
     }
 
     const result = parseCIF(cifContent)
-    
+
     if (result.success === false) {
       if (manageProgress) {
         get().endStructureProcessing()
@@ -124,7 +124,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
     get().resetPresentationTimeline()
     // Initialize the new document's layer tree by replacing old groups with Base.
     get().resetStructureGroupsToBase()
-    
+
     const { latticeParams, crystalSystem, atoms: cifAtoms, centeringType, spaceGroupNumber } = result.data
 
     // Include centering type and spacegroup in lattice params for BZ calculation
@@ -133,13 +133,13 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
       ...(centeringType ? { centeringType } : {}),
       ...(spaceGroupNumber ? { spaceGroupNumber } : {}),
     }
-    
+
     // Reset atom ID counter
     resetAtomIdCounter()
-    
+
     // Calculate lattice vectors first (needed for cartesian conversion)
     const latticeVectors = calculateLatticeVectors(latticeParamsWithExtra)
-    
+
     // Convert CIF atoms to store format
     // CIF parser returns: { element, position (fractional), cartesian (Cartesian) }
     const unitCellAtoms: Atom[] = cifAtoms.map((atom) => ({
@@ -149,11 +149,13 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
       cartesian: atom.cartesian,
       siteIndex: atom.siteIndex,
     }))
-    
+
     // Update store state
     set({
       builderMode: 'structure',
       periodic: true,
+      periodicDirs: { a: true, b: true, c: true },
+      showBonds: false,
       crystalSystem,
       latticeParams: latticeParamsWithExtra,
       latticeVectors,
@@ -212,7 +214,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
       showGrainColoring: false,
       ...analysisOverlayResetPatch(),
     })
-    
+
     if (manageProgress) {
       get().updateStructureProcessing(
         'Expanding supercell',
@@ -233,7 +235,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
     }
     return { success: true }
   },
-  
+
   loadFromXYZ: async (xyzContent, options) => {
     const documentMode = options?.documentMode ?? 'replace'
     const replacesDocument = documentMode === 'replace'
@@ -249,7 +251,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
     }
 
     const result = parseXYZ(xyzContent)
-    
+
     if (result.success === false) {
       if (manageProgress) {
         get().endStructureProcessing()
@@ -296,34 +298,34 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
       get().pushHistory()
     }
     get().clearTrajectory()
-    
-    const { atoms: xyzAtoms, latticeVectors, latticeParams, frames, isTrajectory } = result.data
-    
+
+    const { atoms: xyzAtoms, latticeVectors, latticeParams, frames, isTrajectory, periodic } = result.data
+
     // Reset atom ID counter
     resetAtomIdCounter()
-    
+
     // For XYZ files, atoms are in Cartesian coordinates
     // If extended XYZ has lattice info, we can compute fractional coords
     // Otherwise, treat as molecule (no lattice)
-    
+
     if (latticeVectors && latticeParams) {
       // Extended XYZ with lattice - treat as crystal
       const a = latticeVectors.a
       const b = latticeVectors.b
       const c = latticeVectors.c
-      
+
       // Calculate inverse of lattice matrix to get fractional coords
       const det = a[0] * (b[1] * c[2] - b[2] * c[1])
                 - a[1] * (b[0] * c[2] - b[2] * c[0])
                 + a[2] * (b[0] * c[1] - b[1] * c[0])
-      
+
       const invDet = 1 / det
       const inv = [
         [(b[1] * c[2] - b[2] * c[1]) * invDet, (a[2] * c[1] - a[1] * c[2]) * invDet, (a[1] * b[2] - a[2] * b[1]) * invDet],
         [(b[2] * c[0] - b[0] * c[2]) * invDet, (a[0] * c[2] - a[2] * c[0]) * invDet, (a[2] * b[0] - a[0] * b[2]) * invDet],
         [(b[0] * c[1] - b[1] * c[0]) * invDet, (a[1] * c[0] - a[0] * c[1]) * invDet, (a[0] * b[1] - a[1] * b[0]) * invDet],
       ]
-      
+
       const unitCellAtoms: Atom[] = xyzAtoms.map((atom) => {
         const cart = atom.cartesian ?? [0, 0, 0]
         const x = cart[0], y = cart[1], z = cart[2]
@@ -340,16 +342,18 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
           cartesian: [x, y, z] as [number, number, number],
         }
       })
-      
+
       const storeVectors = {
         a: latticeVectors.a,
         b: latticeVectors.b,
         c: latticeVectors.c,
       }
-      
+
       set({
         builderMode: 'structure',
-        periodic: true,
+        periodic: (periodic ?? [true, true, true]).some(Boolean),
+        periodicDirs: { a: periodic?.[0] ?? true, b: periodic?.[1] ?? true, c: periodic?.[2] ?? true },
+        ...(replacesDocument ? { showBonds: !(periodic ?? [true, true, true]).some(Boolean) } : {}),
         crystalSystem: 'triclinic' as CrystalSystem,
         latticeParams: latticeParams,
         latticeVectors: storeVectors,
@@ -418,7 +422,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
         showGrainColoring: false,
         ...analysisOverlayResetPatch(),
       })
-      
+
       if (manageProgress) {
         get().updateStructureProcessing(
           'Expanding supercell',
@@ -445,7 +449,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
         position: [0, 0, 0] as [number, number, number], // Not used in molecule mode
         cartesian: atom.cartesian ?? [0, 0, 0] as [number, number, number],
       }))
-      
+
       // Store trajectory frames if this is a multi-frame file
       const trajectoryData = isTrajectory ? {
         trajectoryFrames: frames,
@@ -464,11 +468,13 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
         trajectoryCoordinateMode: null,
         trajectoryLatticeMode: null,
       }
-      
+
       set({
         builderMode: 'structure',
         periodic: false,
-        atoms: moleculeAtoms,
+        periodicDirs: { a: false, b: false, c: false },
+        ...(replacesDocument ? { showBonds: true } : {}),
+          atoms: moleculeAtoms,
         bonds: [],
         bondSettings: {
           ...get().bondSettings,
@@ -523,7 +529,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
         ...trajectoryData,
         ...analysisOverlayResetPatch(),
       })
-      
+
       if (manageProgress) {
         const moleculeCount = moleculeAtoms.length
         const frameDetail = isTrajectory
@@ -547,7 +553,7 @@ export const createLoadersSlice: StateCreator<CrystalStore, [], [], LoadersSlice
         get().endStructureProcessing()
       }
     }
-    
+
     return { success: true }
   },
 })

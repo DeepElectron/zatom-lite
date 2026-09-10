@@ -4,7 +4,6 @@
 import { useMemo } from 'react'
 import { useActiveCrystalStore } from '../../orchestration/ViewportContext'
 import { analyzeMergeBoundary } from '../../lib/crystal/merge-boundary'
-import { boundaryModeFor } from '../../lib/crystal/cell-overflow'
 
 export function MergePlacementHUD() {
   const mergePlacement = useActiveCrystalStore((s) => s.mergePlacement)
@@ -16,9 +15,8 @@ export function MergePlacementHUD() {
   const periodic = useActiveCrystalStore((s) => s.periodic)
   const atoms = useActiveCrystalStore((s) => s.atoms)
   const cellOverflowMode = useActiveCrystalStore((s) => s.cellOverflowMode)
-  const boundaryMode = boundaryModeFor(cellOverflowMode)
 
-  // Use the preview analysis to disclose boundary handling before confirmation.
+
   const report = useMemo(() => {
     if (!mergePlacement) return null
     const { position, atomOffsets } = mergePlacement
@@ -33,9 +31,8 @@ export function MergePlacementHUD() {
       periodicDirs,
       periodic,
       atoms.map((a) => (a.cartesian ?? a.position) as [number, number, number]),
-      boundaryMode,
-    )
-  }, [mergePlacement, latticeVectors, supercellParams, periodicDirs, periodic, atoms, boundaryMode])
+      )
+  }, [mergePlacement, latticeVectors, supercellParams, periodicDirs, periodic, atoms])
 
   if (!mergePlacement || !report) return null
 

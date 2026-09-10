@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo } from 'react'
 import { useStore } from 'zustand'
+import { appearanceVisuals, useThemeStore, type Theme } from '../host/themeStore'
 import { useCrystalStore, createCrystalStore } from './crystalStore'
 import { useViewportManager } from './viewportManager'
 
@@ -12,15 +13,15 @@ const ViewportStoreContext = createContext<CrystalStoreHook | null>(null)
 // React's external-store snapshot must be referentially stable while Zustand's
 // source state is unchanged. Cache the derived presentation view by source
 // object so no-selector Canvas consumers can safely read the whole state.
-const presentationStateCache = new WeakMap<CrystalState, CrystalState>()
+const presentationStateCache = new WeakMap<CrystalState, { theme: Theme | null; value: CrystalState }>()
 
-function presentationState(state: CrystalState): CrystalState {
-  if (!state.presentationStylePreview) return state
+function presentationState(state: CrystalState, theme: Theme | null): CrystalState {
   const cached = presentationStateCache.get(state)
-  if (cached) return cached
-  const effective = { ...state, ...state.presentationStylePreview }
-  presentationStateCache.set(state, effective)
-  return effective
+  if (cached && cached.theme === theme) return cached.value
+  const preview = state.presentationStylePreview ? { ...state, ...state.presentationStylePreview } : state
+  const value = appearanceVisuals(preview, theme)
+  presentationStateCache.set(state, { theme, value })
+  return value
 }
 
 export const ViewportStoreProvider = ViewportStoreContext.Provider
@@ -38,21 +39,22 @@ export const ViewportStoreProvider = ViewportStoreContext.Provider
 function _useViewportStoreHook(): CrystalState
 function _useViewportStoreHook<T>(selector: (state: CrystalState) => T): T
 function _useViewportStoreHook<T>(selector?: (state: CrystalState) => T): T | CrystalState {
+  const theme = useThemeStore((state) => state.appearance === 'viewport' ? null : state.theme)
   const store = useContext(ViewportStoreContext)
   if (!store) {
     if (selector) {
       // eslint-disable-next-line react-hooks/rules-of-hooks
-      return useCrystalStore((state) => selector(presentationState(state)))
+      return useCrystalStore((state) => selector(presentationState(state, theme)))
     }
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useCrystalStore(presentationState)
+    return useCrystalStore((state) => presentationState(state, theme))
   }
   if (selector) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    return useStore(store, (state) => selector(presentationState(state)))
+    return useStore(store, (state) => selector(presentationState(state, theme)))
   }
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  return useStore(store, presentationState)
+  return useStore(store, (state) => presentationState(state, theme))
 }
 
 type CrystalStateSetter =

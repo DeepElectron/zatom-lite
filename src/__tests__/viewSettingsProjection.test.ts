@@ -4,6 +4,8 @@ import { createCrystalStore } from '../orchestration/crystalStore'
 function testProjectionModeCanSwitchToOrthographic() {
   const store = createCrystalStore()
 
+  assertEqual(store.getState().cameraProjection, 'orthographic')
+  store.getState().setCameraProjection('perspective')
   assertEqual(store.getState().cameraProjection, 'perspective')
 
   store.setState({

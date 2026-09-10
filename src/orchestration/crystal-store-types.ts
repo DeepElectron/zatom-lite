@@ -132,6 +132,7 @@ export interface BondSettings {
 
 // History state for undo functionality
 export interface HistoryState {
+  cellOverflowMode: CrystalStore['cellOverflowMode']
   atoms: Atom[]
   bonds: Bond[]
   measurements: Measurement[]

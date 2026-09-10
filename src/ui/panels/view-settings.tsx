@@ -244,7 +244,7 @@ export function ViewSettings() {
   const periodic = useCrystalStore((s) => s.periodic)
   const setLodThreshold = useCrystalStore((s) => s.setLodThreshold)
   const setAdaptivePerformanceEnabled = useCrystalStore((s) => s.setAdaptivePerformanceEnabled)
-  
+
   // Determine current render mode
   const largeSceneThresholdOptions = {
     mobileLike: isMobile,
@@ -307,24 +307,19 @@ export function ViewSettings() {
             <span className="text-[13px]" style={{ color: 'var(--panel-text)' }}>Moving atoms outside the cell</span>
             <Segmented
               ariaLabel="Cell overflow mode"
+              allowReselect
               options={CELL_OVERFLOW_OPTIONS.map((o) => o.label)}
               value={CELL_OVERFLOW_OPTIONS.find((o) => o.mode === cellOverflowMode)!.label}
               onChange={(label) => {
                 const next = CELL_OVERFLOW_OPTIONS.find((o) => o.label === label)
-                if (!next || next.mode === cellOverflowMode) return
+                if (!next) return
                 setCellOverflowMode(next.mode)
               }}
             />
             <p className="text-[11px] leading-relaxed" style={{ color: 'var(--panel-text-secondary)' }}>
               {CELL_OVERFLOW_OPTIONS.find((o) => o.mode === cellOverflowMode)!.hint}
             </p>
-            {/* grow-cell changes lattice constants and therefore the material; state that cost explicitly. */}
-            {cellOverflowMode === 'grow-cell' && (
-              <p className="text-[11px] leading-relaxed" style={{ color: 'var(--status-amber)' }}>
-                Changes the lattice constants, so the material itself changes. Intended for vacuum padding on
-                slabs and molecules — not for a genuinely periodic axis.
-              </p>
-            )}
+
           </div>
         )}
       </section>
@@ -336,7 +331,7 @@ export function ViewSettings() {
         <label className="text-xs text-[var(--text-secondary)] mb-2 block font-medium">
           Performance
         </label>
-        
+
         {/* Current render mode indicator */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-[var(--text-secondary)]">Render Mode</span>
@@ -351,7 +346,7 @@ export function ViewSettings() {
             {renderModeMeta.label}
           </span>
         </div>
-        
+
         {/* Atom count info */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-[var(--text-secondary)]">Atoms</span>
@@ -381,14 +376,14 @@ export function ViewSettings() {
             Switch to instanced rendering above this count
           </p>
         </div>
-        
+
         {/* Large Scene Thresholds — dual handle */}
         <LargeSceneThresholdSlider />
 
         {/* Solid Box Manual Toggle */}
         <SolidBoxToggle />
         <RegionViewSection />
-        
+
       </div>
 
       {/* Analysis overlays are visual evidence, not a performance preference. */}

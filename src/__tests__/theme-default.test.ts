@@ -85,15 +85,6 @@ describe('the pre-paint script and the store agree', () => {
     expect(THEME_BOOTSTRAP_SOURCE).toContain('document.documentElement.dataset.appearance = appearance')
   })
 
-  it('migrates v2 automatic choices to viewport-aware Auto without losing manual overrides', () => {
-    expect(THEME_STORE_SOURCE).toContain("const STORAGE_KEY = 'zatom-appearance-v3'")
-    expect(THEME_STORE_SOURCE).toContain("const LEGACY_STORAGE_KEY = 'zatom-appearance-v2'")
-    expect(THEME_STORE_SOURCE).toMatch(/legacy === 'light' \|\| legacy === 'dark'/)
-    expect(THEME_STORE_SOURCE).toMatch(/legacy === 'system' \|\| legacy === 'viewport'\) return 'viewport'/)
-    expect(THEME_BOOTSTRAP_SOURCE).toContain("localStorage.getItem('zatom-appearance-v2')")
-    expect(THEME_BOOTSTRAP_SOURCE).toMatch(/legacy === 'system' \|\| legacy === 'viewport'\) appearance = 'viewport'/)
-  })
-
   it('System resolves the operating-system scheme before first paint', () => {
     expect(DEFAULT_SYSTEM_THEME).toBe('light')
     expect(THEME_BOOTSTRAP_SOURCE).toContain("window.matchMedia('(prefers-color-scheme: dark)').matches")
@@ -112,13 +103,13 @@ describe('the pre-paint script and the store agree', () => {
 })
 
 describe('appearance resolution', () => {
-  it('defaults to Auto', () => {
-    expect(DEFAULT_APPEARANCE).toBe('viewport')
+  it('defaults to System', () => {
+    expect(DEFAULT_APPEARANCE).toBe('system')
   })
 
   it('keeps Auto coherent with a white viewport while System can follow a dark OS', () => {
     const viewportTheme = resolveViewportTheme('#ffffff')
-    expect(resolveAppearanceTheme(DEFAULT_APPEARANCE, 'dark', viewportTheme)).toBe('light')
+    expect(resolveAppearanceTheme(DEFAULT_APPEARANCE, 'dark', viewportTheme)).toBe('dark')
     expect(resolveAppearanceTheme('system', 'dark', viewportTheme)).toBe('dark')
   })
 
@@ -165,28 +156,13 @@ describe('appearance resolution', () => {
     expect(resolveViewportTheme('invalid')).toBe(DEFAULT_VIEWPORT_THEME)
   })
 
-  it('updates only the resolved mode while keeping the other live inputs ready', () => {
-    const store = useThemeStore.getState()
-    store.setAppearance('dark')
-    useThemeStore.getState().setSystemTheme('light')
-    useThemeStore.getState().setViewportTheme('light')
-    expect(useThemeStore.getState().theme).toBe('dark')
-    expect(useThemeStore.getState().systemTheme).toBe('light')
-    expect(useThemeStore.getState().viewportTheme).toBe('light')
-
-    useThemeStore.getState().setAppearance('system')
-    expect(useThemeStore.getState().theme).toBe('light')
-    useThemeStore.getState().setSystemTheme('dark')
-    expect(useThemeStore.getState().theme).toBe('dark')
-
-    useThemeStore.getState().setAppearance('viewport')
-    expect(useThemeStore.getState().theme).toBe('light')
-    useThemeStore.getState().setViewportTheme('dark')
-    expect(useThemeStore.getState().theme).toBe('dark')
-
-    // Leave the singleton in the product default for any later tests in this worker.
-    useThemeStore.getState().setSystemTheme(DEFAULT_SYSTEM_THEME)
-    useThemeStore.getState().setViewportTheme(DEFAULT_VIEWPORT_THEME)
+  it('preserves explicit appearance when a saved viewport has a different background', () => {
+    for (const appearance of ['light', 'dark'] as const) {
+      useThemeStore.getState().setAppearance(appearance)
+      useThemeStore.getState().setViewportTheme(appearance === 'dark' ? 'light' : 'dark')
+      expect(useThemeStore.getState().appearance).toBe(appearance)
+      expect(useThemeStore.getState().theme).toBe(appearance)
+    }
     useThemeStore.getState().setAppearance(DEFAULT_APPEARANCE)
   })
 
@@ -226,9 +202,9 @@ describe('modeler chrome materials', () => {
     expect(MODELER_VIEW_SOURCE).toContain("backgroundImage: theme === 'dark' && appearance !== 'viewport'")
   })
 
-  it('exposes distinct Auto and System choices without a duplicate viewport mode', () => {
-    expect(VISUAL_SETTINGS_SOURCE).toContain("options={['Auto', 'System', 'Light', 'Dark']}")
-    expect(VISUAL_SETTINGS_SOURCE).toContain("value === 'Auto' ? 'viewport'")
+  it('exposes explicit System and Viewport choices', () => {
+    expect(VISUAL_SETTINGS_SOURCE).toContain("options={['System', 'Light', 'Dark', 'Viewport']}")
+    expect(VISUAL_SETTINGS_SOURCE).toContain("value === 'Viewport' ? 'viewport'")
     expect(VISUAL_SETTINGS_SOURCE).toContain("value === 'System' ? 'system'")
     expect(VISUAL_SETTINGS_SOURCE).not.toContain('Match Viewport')
   })

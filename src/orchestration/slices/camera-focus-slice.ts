@@ -20,6 +20,8 @@
  */
 
 import type { StateCreator } from 'zustand'
+import { resolveViewDirection, type CameraViewSpec } from '../../lib/render/camera-directions'
+import { invert3x3 } from '../../lib/crystal/lattice-math'
 import { getElement } from '../../lib/crystal/elements'
 import type { BioCameraPose } from '../../lib/biomolecule/camera-track'
 import {
@@ -59,6 +61,7 @@ export interface CameraFocusSlice {
    *  region to frame. Dollies to a fitting distance, preserving the view angle. */
   /** Omit `durationMs` for the camera-controller default; drill-down legs pass it based on span. */
   focusOnPoint: (center: [number, number, number], spread: number, durationMs?: number) => void
+  setPeriodicView: (view: CameraViewSpec, durationMs?: number) => void
   clearFocusedAtoms: () => void
   clearMassiveSceneVisualFocus: () => void
   /** Bump cameraAutoResetVersion so the camera-controller re-fits to the current
@@ -252,6 +255,31 @@ export const createCameraFocusSlice: StateCreator<CrystalStore, [], [], CameraFo
           ? { sceneClearance: cameraSceneClearanceFromBounds(compactBounds, center) }
           : {}),
         ...(durationMs === undefined ? {} : { durationMs }),
+      },
+      isAnimatingCamera: true,
+    })
+  },
+
+  setPeriodicView: (view, durationMs = 180) => {
+    const state = get()
+    if (!state.periodic || !Object.values(state.periodicDirs).some(Boolean)
+      || !invert3x3(state.latticeVectors) || (!state.atoms.length && !state.compactStructure)) return
+    const direction = resolveViewDirection(view, [state.latticeVectors.a, state.latticeVectors.b, state.latticeVectors.c])
+    const center = state.savedCameraState?.target ?? state.initialCameraLookAt
+    const eye = state.savedCameraState?.position ?? state.initialCameraPosition
+    if (!center || !eye) return
+    const distance = Math.hypot(eye[0] - center[0], eye[1] - center[1], eye[2] - center[2])
+    if (distance < 1e-9) return
+    state.pausePresentation()
+    set({
+      ...clearedFocusPatch(),
+      autoRotate: false,
+      cameraTarget: {
+        position: [center[0] + direction[0] * distance, center[1] + direction[1] * distance, center[2] + direction[2] * distance],
+        lookAt: [...center],
+        zoom: state.savedCameraState?.zoom ?? state.initialCameraZoom ?? undefined,
+        forceOrientation: true,
+        durationMs,
       },
       isAnimatingCamera: true,
     })

@@ -22,6 +22,9 @@
 
 import type { StateCreator } from 'zustand'
 import type { Atom, Bond } from '../../lib/crystal/types'
+import { bondsAfterPlacement, hasExplicitTopology } from './lattice-supercell-slice'
+import { displayPositionOf } from '../../lib/crystal/cell-overflow'
+import { scaleLatticeVectorsForSupercell } from '../../lib/crystal/supercell-utils'
 import { recomputeBonds } from '../recompute-bonds'
 import { calculateLatticeVectors, getDefaultLatticeParams, cartesianToFractional } from '../../lib/crystal/lattice'
 import { generateSupercell, generateAtomId, resetAtomIdCounter } from '../../lib/crystal/supercell-utils'
@@ -111,7 +114,7 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
     // molecular editor is explicit and avoids stale residue/selection science.
     get().clearBiomolecule()
     // Update in supercell atoms
-    const atoms = get().atoms.map(a => 
+    const atoms = get().atoms.map(a =>
       a.id === atomId ? { ...a, element } : a
     )
     set({ atoms })
@@ -156,10 +159,10 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
   updateSelectedAtomsElement: (element) => {
     const { selectedAtomIds, atoms } = get()
     if (selectedAtomIds.size === 0) return
-    
+
     get().pushHistory()
     get().clearBiomolecule()
-    const updatedAtoms = atoms.map(a => 
+    const updatedAtoms = atoms.map(a =>
       selectedAtomIds.has(a.id) ? { ...a, element } : a
     )
     set({ atoms: updatedAtoms })
@@ -169,7 +172,7 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
   translateSelectedAtoms: (delta) => {
     const { selectedAtomIds, atoms } = get()
     if (selectedAtomIds.size === 0) return
-    
+
     get().pushHistory()
     const updatedAtoms = atoms.map(a => {
       if (!selectedAtomIds.has(a.id)) return a
@@ -186,28 +189,29 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
   },
 
   updateAtomPosition: (atomId, position) => {
-    // Check if atom is in unitCellAtoms
-    const isUnitCellAtom = get().unitCellAtoms.some(a => a.id === atomId)
-    const latticeVectors = get().latticeVectors
-
-    if (isUnitCellAtom && latticeVectors) {
-      // Callers provide Cartesian coordinates, while unitCellAtoms.position is fractional.
-      // Convert before writing; otherwise Cartesian values are interpreted as fractional coordinates,
-      // sending the atom several lattice lengths away (the root cause of drag lagging behind the cursor).
-      const fractional = cartesianToFractional(position, latticeVectors)
-      const unitCellAtoms = get().unitCellAtoms.map(a =>
-        a.id === atomId ? { ...a, position: fractional } : a
-      )
-      set({ unitCellAtoms })
-      return get().regenerateSupercell()
+    const state = get()
+    const box = scaleLatticeVectorsForSupercell(state.latticeVectors, state.supercellParams)
+    const atoms = state.atoms.map(atom => atom.id === atomId ? {
+      ...atom, cartesian: position, displayImage: undefined,
+      position: state.periodic ? cartesianToFractional(position, box) : position,
+    } : atom)
+    const unitCellAtoms = state.unitCellAtoms.map(atom => atom.id === atomId ? {
+      ...atom, position: cartesianToFractional(position, state.latticeVectors), cartesian: position,
+    } : atom)
+    // A drag is a coordinate edit, not a supercell rebuild. Retain atom IDs and
+    // declared topology; the caller applies the boundary rule when released.
+    let bonds = state.bonds
+    if (hasExplicitTopology(state)) {
+      const shownAtoms = state.atoms.map(atom => atom.id === atomId && state.cellOverflowMode === 'tile-images'
+        ? { ...atom, cartesian: displayPositionOf(atom.cartesian ?? atom.position, atom.displayImage, state.latticeVectors) }
+        : atom)
+      const shownBonds = bondsAfterPlacement(state, shownAtoms, state.latticeVectors, box)
+      bonds = bondsAfterPlacement({ ...state, atoms: shownAtoms, bonds: shownBonds }, atoms, state.latticeVectors)
     } else {
-      // Update supercell atom directly (cartesian coordinates)
-      const atoms = get().atoms.map(a =>
-        a.id === atomId ? { ...a, cartesian: position, position } : a
-      )
-      set({ atoms })
-      get().syncBiomoleculeCoordinates(atoms)
+      bonds = recomputeBonds(state, { atoms })
     }
+    set({atoms, unitCellAtoms, bonds})
+    get().syncBiomoleculeCoordinates(atoms)
   },
 
   addBond: (atom1Id, atom2Id, type) => {
@@ -250,7 +254,7 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
     if (selectedBondIds.size === 0) return
     get().pushHistory()
     get().clearBiomolecule()
-    
+
     set({
       bonds: bonds.map(b =>
         selectedBondIds.has(b.id) ? { ...b, type } : b
@@ -267,24 +271,24 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
   },
 
   // Selection / hover / context menu actions: createSelectionSlice (spread above)
-  
+
   replaceSelectedAtoms: (newElement) => {
   get().pushHistory()
   get().clearBiomolecule()
   const { atoms, contextMenuAtomIds, selectedAtomIds } = get()
-  const idsToReplace = contextMenuAtomIds.length > 0 
-    ? new Set(contextMenuAtomIds) 
+  const idsToReplace = contextMenuAtomIds.length > 0
+    ? new Set(contextMenuAtomIds)
     : selectedAtomIds
-  
+
   const newAtoms = atoms.map(atom => {
     if (idsToReplace.has(atom.id)) {
       return { ...atom, element: newElement }
     }
     return atom
   })
-  
+
   set({ atoms: newAtoms, contextMenuPosition: null, contextMenuAtomIds: [] })
-  
+
   // Re-detect bonds for new element types
   setTimeout(() => {
     get().autoDetectBonds()
@@ -294,7 +298,7 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
   // Camera + focus actions: createCameraFocusSlice (spread above)
 
   // View settings actions: createViewSettingsSlice (spread above)
-  
+
   // Cell management actions: createCellManagementSlice (spread above)
 
   regenerateSupercell: async () => {
@@ -354,7 +358,7 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
     // Push history before making changes
     get().pushHistory()
     get().clearBiomolecule()
-    
+
     // In composite-structure mode, a new atom belongs to the selected sublayer
     // according to structure-groups-slice semantics.
     const activeGroupId = get().activeGroupId
@@ -365,17 +369,17 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
       cartesian,
       ...(activeGroupId !== null ? { groupId: activeGroupId } : {}),
     }
-    
+
     const wasEmpty = get().atoms.length === 0
     const atoms = [...get().atoms, newAtom]
-    
+
     // Track user-added atom for preservation during expansion
     const userAddedAtomIds = new Set(get().userAddedAtomIds)
     userAddedAtomIds.add(newAtom.id)
-    
+
     set({ atoms, userAddedAtomIds })
     if (wasEmpty) get().triggerCameraAutoReset()
-    
+
     // Re-detect bonds
     setTimeout(() => {
       get().autoDetectBonds()
@@ -395,11 +399,11 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
   }
   get().pushHistory()
   const { atoms, bonds, selectedAtomIds, userDeletedPositions, userAddedAtomIds } = get()
-  
+
   // Track deleted positions for normal mode expansion
   const newDeletedPositions = new Set(userDeletedPositions)
   const newUserAddedAtomIds = new Set(userAddedAtomIds)
-  
+
   atoms.forEach(atom => {
     if (selectedAtomIds.has(atom.id) && atom.cartesian) {
       // Record the position so it won't be regenerated
@@ -409,15 +413,15 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
       newUserAddedAtomIds.delete(atom.id)
     }
   })
-  
+
   const newAtoms = atoms.filter(a => !selectedAtomIds.has(a.id))
   // Also remove bonds connected to deleted atoms
   const newBonds = bonds.filter(b =>
   !selectedAtomIds.has(b.atom1Id) && !selectedAtomIds.has(b.atom2Id)
   )
-  set({ 
-    atoms: newAtoms, 
-    bonds: newBonds, 
+  set({
+    atoms: newAtoms,
+    bonds: newBonds,
     selectedAtomIds: new Set(),
     userDeletedPositions: newDeletedPositions,
     userAddedAtomIds: newUserAddedAtomIds,
@@ -460,11 +464,11 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
     get().pushHistory()
     const { atoms, bonds, userDeletedPositions, userAddedAtomIds, focusedAtomIds } = get()
     const idsToDelete = new Set(atomIds)
-    
+
     // Track deleted positions for normal mode expansion
     const newDeletedPositions = new Set(userDeletedPositions)
     const newUserAddedAtomIds = new Set(userAddedAtomIds)
-    
+
     atoms.forEach(atom => {
       if (idsToDelete.has(atom.id) && atom.cartesian) {
         const posKey = `${atom.cartesian[0].toFixed(3)}-${atom.cartesian[1].toFixed(3)}-${atom.cartesian[2].toFixed(3)}`
@@ -472,14 +476,14 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
         newUserAddedAtomIds.delete(atom.id)
       }
     })
-    
+
     const newAtoms = atoms.filter(a => !idsToDelete.has(a.id))
     const newBonds = bonds.filter(b => !idsToDelete.has(b.atom1Id) && !idsToDelete.has(b.atom2Id))
-    
+
     // Also remove deleted atoms from focusedAtomIds
     const newFocusedAtomIds = new Set(focusedAtomIds)
     atomIds.forEach(id => newFocusedAtomIds.delete(id))
-    
+
     set({
       atoms: newAtoms,
       bonds: newBonds,
@@ -521,6 +525,7 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
       latticeVectors: calculateLatticeVectors(latticeParams),
       supercellParams: { nx: 1, ny: 1, nz: 1 },
       periodic: false,
+      showBonds: true,
       unitCellAtoms: [],
       atoms: [],
       bonds: [],
@@ -583,7 +588,7 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
   },
 
   // Bond settings actions: createBondSlice (spread above)
-  
+
   // Element filter actions: createElementFilterSlice (spread above)
 
 
@@ -613,6 +618,7 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
     get().clearCompactStructure()
     set({
       periodic: false,
+      showBonds: true,
       atoms,
       unitCellAtoms: [],
       bonds: [],
@@ -655,11 +661,11 @@ export const createAtomBondCrudSlice: StateCreator<CrystalStore, [], [], AtomBon
     get().resetStructureGroupsToBase()
     get().beginCameraDocument()
   },
-  
+
   setBondsDirectly: (bonds) => {
     get().pushHistory()
     if (get().bioStructure) get().clearBiomolecule()
     set({ bonds, selectedBondIds: new Set() })
   },
-  
+
 })

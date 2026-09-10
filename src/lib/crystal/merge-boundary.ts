@@ -4,6 +4,7 @@
  * Cartesian placement. The result also reports overlap risks for preview UI.
  */
 
+import { cellImageIndex } from './cell-overflow'
 import type { LatticeVectors } from './types'
 import { cartesianToFractional, fractionalToCartesian, calculateVolume } from './lattice'
 
@@ -12,11 +13,8 @@ const MIN_ATOM_DISTANCE = 0.75
 
 export type MergeAtomStatus = 'ok' | 'wrap' | 'extend'
 
-/** `wrap` canonicalizes periodic positions; `extend` preserves atoms and grows the cell. */
-export type BoundaryOverflowMode = 'wrap' | 'extend'
-
 export interface MergeBoundaryReport {
-  /** Final Cartesian position of every incoming atom. */
+
   finalPositions: [number, number, number][]
   /** Boundary action for each atom, used by preview coloring. */
   atomStatus: MergeAtomStatus[]
@@ -43,9 +41,7 @@ export function wrapAnchorIntoBox(
   supercell: { nx: number; ny: number; nz: number },
   periodicDirs: { a: boolean; b: boolean; c: boolean },
   periodic: boolean,
-  overflowMode: BoundaryOverflowMode,
 ): [number, number, number] {
-  if (overflowMode === 'extend') return position
   if (!periodic || calculateVolume(latticeVectors) < 1e-9) return position
   if (!periodicDirs.a && !periodicDirs.b && !periodicDirs.c) return position
 
@@ -57,7 +53,7 @@ export function wrapAnchorIntoBox(
   const frac = cartesianToFractional(position, box)
   const wrapped: [number, number, number] = [frac[0], frac[1], frac[2]]
   AXES.forEach((axis, i) => {
-    if (periodicDirs[axis]) wrapped[i] = wrapped[i] - Math.floor(wrapped[i])
+    if (periodicDirs[axis]) wrapped[i] = wrapped[i] - cellImageIndex(wrapped[i])
   })
   return fractionalToCartesian(wrapped, box)
 }
@@ -69,7 +65,6 @@ export function analyzeMergeBoundary(
   periodicDirs: { a: boolean; b: boolean; c: boolean },
   periodic: boolean,
   existingPositions: [number, number, number][],
-  overflowMode: BoundaryOverflowMode,
 ): MergeBoundaryReport {
   const passthrough = (): MergeBoundaryReport => {
     const tooClose = markTooClose(positions, existingPositions)
@@ -96,10 +91,10 @@ export function analyzeMergeBoundary(
 
   const fracs = positions.map((p) => cartesianToFractional(p, box))
 
-  // Aperiodic axes always expand; `extend` applies the same rule to periodic axes.
-  const growsToFit = (axis: 'a' | 'b' | 'c') => overflowMode === 'extend' || !periodicDirs[axis]
+  // Only open axes can receive vacuum padding; periodic lattice lengths are fixed.
+  const growsToFit = (axis: 'a' | 'b' | 'c') => !periodicDirs[axis]
 
-  // Expanding axes preserve the group as a rigid placement.
+
   const shiftFrac: [number, number, number] = [0, 0, 0]
   const extendAxes: MergeBoundaryReport['extendAxes'] = []
   const extendedAxis = { a: false, b: false, c: false }
@@ -112,18 +107,13 @@ export function analyzeMergeBoundary(
       if (f[i] < min) min = f[i]
       if (f[i] > max) max = f[i]
     }
-    // `extend` preserves negative coordinates; the caller expands the cell origin
-    // rather than translating only the edited subset and tearing its geometry.
-    if (min < 0 && overflowMode !== 'extend') shiftFrac[i] = -min
+    if (min < 0) shiftFrac[i] = -min
     const required = max + shiftFrac[i]
     if (required > 1) {
       const boxLen = norm(box[axis])
       extendAxes.push({ axis, newUnitLength: (required * boxLen) / counts[axis] })
       extendedAxis[axis] = true
     } else if (shiftFrac[i] > 0) {
-      extendedAxis[axis] = true // Only translation also belongs to boundary processing, mark prompt
-    } else if (min < 0) {
-      // Retain negative coordinates but mark them as extending for preview UI.
       extendedAxis[axis] = true
     }
   })
@@ -138,7 +128,7 @@ export function analyzeMergeBoundary(
     let status: MergeAtomStatus = 'ok'
     AXES.forEach((axis, i) => {
       if (!growsToFit(axis)) {
-        const wrapped = shifted[i] - Math.floor(shifted[i])
+        const wrapped = shifted[i] - cellImageIndex(shifted[i])
         if (Math.abs(wrapped - shifted[i]) > 1e-9) status = 'wrap'
         shifted[i] = wrapped
       } else if (extendedAxis[axis] && (f[i] < 0 || f[i] > 1)) {

@@ -34,6 +34,7 @@ function clone<T>(value: T): T {
 
 function structureSnapshot(state: CrystalStore): HistoryState {
   return {
+    cellOverflowMode: state.cellOverflowMode,
     atoms: clone(state.atoms),
     bonds: clone(state.bonds),
     measurements: clone(state.measurements),
@@ -78,6 +79,7 @@ function restoreHistorySnapshot(
     restoreBiomoleculePresentationArtifact({ getState: get, setState: set }, clone(snapshot.biomoleculePresentation))
   }
   set({
+    cellOverflowMode: snapshot.cellOverflowMode,
     atoms: clone(snapshot.atoms),
     bonds: clone(snapshot.bonds),
     measurements: clone(snapshot.measurements),

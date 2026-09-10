@@ -3,18 +3,14 @@
   firstPaintStyle.textContent = 'html { background-color: #ffffff; } html.dark { background-color: #06080a; }'
   document.head.appendChild(firstPaintStyle)
 
-  var appearance = 'viewport'
+  var appearance = 'system'
   try {
     var stored = localStorage.getItem('zatom-appearance-v3')
     if (stored === 'system' || stored === 'viewport' || stored === 'light' || stored === 'dark') {
       appearance = stored
-    } else {
-      var legacy = localStorage.getItem('zatom-appearance-v2')
-      if (legacy === 'light' || legacy === 'dark') appearance = legacy
-      else if (legacy === 'system' || legacy === 'viewport') appearance = 'viewport'
     }
   } catch (_error) {
-    // Storage denial keeps the documented viewport-matching default.
+    // Storage denial keeps the system default.
   }
   var systemIsDark = typeof window.matchMedia === 'function'
     && window.matchMedia('(prefers-color-scheme: dark)').matches

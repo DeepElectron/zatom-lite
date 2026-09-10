@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Trash2, X } from "lucide-react"
 import { useActiveCrystalStore as useCrystalStore } from "../../orchestration/ViewportContext"
-import { ELEMENTS, getElement } from "../../lib/crystal/elements"
+import { getElement } from "../../lib/crystal/elements"
 import { BOND_LENGTHS, DEFAULT_BOND_TOLERANCE } from "../../lib/crystal/bonds"
 import { SectionLabel, SliderRow, ToggleRow } from "./panel-ui"
 
@@ -17,11 +17,6 @@ import { SectionLabel, SliderRow, ToggleRow } from "./panel-ui"
  * (whole structure) -> pair overrides (one pair). Read-only material sits
  * behind one disclosure so it cannot crowd the controls.
  */
-
-function normalizeElementSymbol(value: string): string {
-  const trimmed = value.trim()
-  return trimmed ? `${trimmed[0].toUpperCase()}${trimmed.slice(1).toLowerCase()}` : ''
-}
 
 /** Hairline group separator, matching the Tools page. */
 function Rule() {
@@ -55,28 +50,19 @@ function DeferredSliderRow({
   const [draft, setDraft] = useState(value)
   useEffect(() => setDraft(value), [value])
 
-  const commit = () => {
-    if (Math.abs(draft - value) > 1e-9) onCommit(draft)
-  }
-
   return (
-    <div
-      onPointerUp={commit}
-      onBlur={commit}
-      onKeyUp={(e) => {
-        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) commit()
+    <SliderRow
+      label={label}
+      value={draft}
+      min={min}
+      max={max}
+      step={step}
+      display={display(draft)}
+      onChange={setDraft}
+      onCommit={(next) => {
+        if (Math.abs(next - value) > 1e-9) onCommit(next)
       }}
-    >
-      <SliderRow
-        label={label}
-        value={draft}
-        min={min}
-        max={max}
-        step={step}
-        display={display(draft)}
-        onChange={setDraft}
-      />
-    </div>
+    />
   )
 }
 
@@ -94,16 +80,30 @@ export function BondSettings() {
   const periodic = useCrystalStore((s) => s.periodic)
   const bonds = useCrystalStore((s) => s.bonds)
 
-  const [newPair, setNewPair] = useState({ e1: 'Cu', e2: 'O', radius: '2.5' })
+  const presentElements = useMemo(() => [...new Set(atoms.map(a => a.element))].sort(), [atoms])
+  const elementsKey = presentElements.join('-')
+  const [pairDraft, setPairDraft] = useState<{ scope: string; e1: string; e2: string; radius?: string } | null>(null)
+  // Scope the draft to the composition so another structure cannot inherit its elements.
+  const newPair = pairDraft?.scope === elementsKey
+    ? pairDraft
+    : { scope: elementsKey, e1: presentElements[0] ?? '', e2: presentElements[1] ?? presentElements[0] ?? '' }
+  const pairKey = [newPair.e1, newPair.e2].sort().join('-')
+  const pairRadius = newPair.radius ?? (presentElements.length > 0
+    ? String(bondSettings.elementPairRadii[pairKey] ?? Math.min(
+      getElement(newPair.e1).radius + getElement(newPair.e2).radius + bondSettings.tolerance,
+      bondSettings.defaultRadius,
+    ))
+    : '')
   const [pairError, setPairError] = useState<string | null>(null)
   const [detail, setDetail] = useState<'none' | 'resolved' | 'reference'>('none')
 
+  useEffect(() => setPairError(null), [elementsKey])
+
   const addElementPair = () => {
-    const e1 = normalizeElementSymbol(newPair.e1)
-    const e2 = normalizeElementSymbol(newPair.e2)
-    const radius = Number(newPair.radius)
-    if (!ELEMENTS[e1] || !ELEMENTS[e2]) {
-      setPairError('Enter two valid element symbols.')
+    const { e1, e2 } = newPair
+    const radius = Number(pairRadius)
+    if (!presentElements.includes(e1) || !presentElements.includes(e2)) {
+      setPairError('Choose two elements from this structure.')
       return
     }
     if (!Number.isFinite(radius) || radius < 0.5 || radius > 8) {
@@ -111,7 +111,6 @@ export function BondSettings() {
       return
     }
     setPairError(null)
-    setNewPair({ e1, e2, radius: String(radius) })
     setElementPairRadius(e1, e2, radius)
   }
 
@@ -281,27 +280,32 @@ export function BondSettings() {
         )}
 
         <div className="flex gap-1.5">
-          <input
-            type="text"
+          <select
             value={newPair.e1}
-            onChange={(e) => setNewPair(p => ({ ...p, e1: e.target.value }))}
-            placeholder="Cu"
+            onChange={(e) => { setPairDraft({ ...newPair, e1: e.target.value, radius: undefined }); setPairError(null) }}
+            disabled={presentElements.length === 0}
             aria-label="First element"
-            className="zatom-field w-11 rounded-lg px-2 py-1.5 text-center text-[12px]"
-          />
+            className="zatom-field min-w-0 w-16 rounded-lg px-1 py-1.5 text-center text-[12px]"
+          >
+            {presentElements.length === 0 && <option value="">—</option>}
+            {presentElements.map(element => <option key={element} value={element}>{element}</option>)}
+          </select>
           <span className="self-center text-[var(--panel-text-tertiary)]">–</span>
-          <input
-            type="text"
+          <select
             value={newPair.e2}
-            onChange={(e) => setNewPair(p => ({ ...p, e2: e.target.value }))}
-            placeholder="O"
+            onChange={(e) => { setPairDraft({ ...newPair, e2: e.target.value, radius: undefined }); setPairError(null) }}
+            disabled={presentElements.length === 0}
             aria-label="Second element"
-            className="zatom-field w-11 rounded-lg px-2 py-1.5 text-center text-[12px]"
-          />
+            className="zatom-field min-w-0 w-16 rounded-lg px-1 py-1.5 text-center text-[12px]"
+          >
+            {presentElements.length === 0 && <option value="">—</option>}
+            {presentElements.map(element => <option key={element} value={element}>{element}</option>)}
+          </select>
           <input
             type="number"
-            value={newPair.radius}
-            onChange={(e) => setNewPair(p => ({ ...p, radius: e.target.value }))}
+            value={pairRadius}
+            onChange={(e) => setPairDraft({ ...newPair, radius: e.target.value })}
+            disabled={presentElements.length === 0}
             step="0.1"
             min="0.5"
             max="8"
@@ -310,6 +314,7 @@ export function BondSettings() {
           />
           <button
             onClick={addElementPair}
+            disabled={presentElements.length === 0}
             className="zatom-primary zatom-pressable flex-1 rounded-lg px-3 py-1.5 text-[12px] font-medium"
           >
             Add

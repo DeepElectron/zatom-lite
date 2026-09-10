@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  boundaryModeFor,
   computeImageTileRange,
   displayPositionOf,
   isOriginTileRange,
@@ -14,16 +13,6 @@ const CUBIC: LatticeVectors = { a: [10, 0, 0], b: [0, 10, 0], c: [0, 0, 10] }
 // Cline cell: Verify that the mirror bit is translated along the **lattice vector** and not the world axis.
 const TRICLINIC: LatticeVectors = { a: [10, 0, 0], b: [3, 9, 0], c: [1, 2, 8] }
 const ALL_PERIODIC = { a: true, b: true, c: true }
-
-describe('cell-overflow：三模式的落点语义', () => {
-  it('grow-cell 不折回坐标，另两个折回', () => {
-    // `tile-images` and `fold-in` store the same canonical coordinates; their
-    // difference is purely visual. Only `grow-cell` changes the cell.
-    expect(boundaryModeFor('grow-cell')).toBe('extend')
-    expect(boundaryModeFor('tile-images')).toBe('wrap')
-    expect(boundaryModeFor('fold-in')).toBe('wrap')
-  })
-})
 
 describe('splitIntoCellImage：规范坐标 + 整数镜像位', () => {
   it('胞内原子原样返回，不引入浮点抖动', () => {

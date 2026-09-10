@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react"
 import { useActiveCrystalStore as useCrystalStore } from "../../orchestration/ViewportContext"
 
+import { hasExplicitTopology } from '../../orchestration/slices/lattice-supercell-slice'
+
 function SupercellAxisInput({
   axis,
   value,
   onCommit,
+  disabled = false,
 }: {
   axis: 'nx' | 'ny' | 'nz'
   value: number
   onCommit: (value: number) => void
+  disabled?: boolean
 }) {
   const [draft, setDraft] = useState(String(value))
 
@@ -29,6 +33,7 @@ function SupercellAxisInput({
       <label className="mb-1 block text-[10px] text-[var(--text-tertiary)]">{axis}</label>
       <input
         type="number"
+        disabled={disabled}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={commit}
@@ -49,6 +54,8 @@ function SupercellAxisInput({
 }
 
 export function SupercellControls() {
+  const explicitTopology = useCrystalStore(hasExplicitTopology)
+  const processing = useCrystalStore(state => state.structureProcessing.active)
   const supercellParams = useCrystalStore((state) => state.supercellParams)
   const setSupercellParams = useCrystalStore((state) => state.setSupercellParams)
   const supercellMode = useCrystalStore((state) => state.supercellMode)
@@ -72,6 +79,8 @@ export function SupercellControls() {
             aria-pressed={supercellMode === 'normal'}
             data-selected={supercellMode === 'normal'}
             onClick={() => setMode('normal')}
+            disabled={explicitTopology || processing}
+            title={explicitTopology ? 'Use Fork to preserve declared bonds; Normal has no unit-cell bond template.' : undefined}
             className="zatom-choice zatom-pressable flex-1 rounded px-3 py-1.5 text-xs font-medium"
           >
             Normal
@@ -87,7 +96,9 @@ export function SupercellControls() {
           </button>
         </div>
         <p className="mt-1 text-[10px] text-[var(--text-tertiary)]">
-          {supercellMode === 'normal'
+          {supercellMode === 'normal' && explicitTopology
+            ? 'Choose Fork to preserve declared bonds. Normal requires a unit-cell bond template.'
+            : supercellMode === 'normal'
             ? 'Add unit cells while preserving edits'
             : 'Duplicate the edited structure along one axis'}
         </p>
@@ -105,6 +116,8 @@ export function SupercellControls() {
                 key={axis}
                 type="button"
                 onClick={() => doubleAxis(axis)}
+                disabled={processing || supercellParams[axis] * 2 > 100}
+                title={supercellParams[axis] * 2 > 100 ? "Doubling exceeds the 100-cell axis limit" : undefined}
                 className="zatom-choice zatom-pressable rounded px-2 py-2 text-xs font-medium tabular-nums"
               >
                 {axis.slice(1).toUpperCase()}: {supercellParams[axis]} → {supercellParams[axis] * 2}
@@ -118,6 +131,7 @@ export function SupercellControls() {
                 key={axis}
                 axis={axis}
                 value={supercellParams[axis]}
+                disabled={processing || explicitTopology}
                 onCommit={(value) => setSupercellParams({ [axis]: value })}
               />
             ))}

@@ -22,7 +22,7 @@ import { BrillouinZoneOverlay } from './brillouin-zone-overlay'
 import { SymmetryOverlay } from './symmetry-overlay'
 import { SelectionRegionPreview } from './selection-region-preview'
 import { SelectionTransformGizmo } from './selection-transform-gizmo'
-import { HyperStickBonds } from './hyper-stick-bonds'
+import { HyperStickBonds, hyperStickBondedAtomIds } from './hyper-stick-bonds'
 import { MolecularOrbitalLayer } from './molecular-orbital-layer'
 import { SurfaceExtremumMarkers } from './surface-extremum-markers'
 import { AtomRingDecoration } from './atom-ring-decoration'
@@ -497,6 +497,21 @@ export function CrystalScene({ hidePrimaryStructure = false }: { hidePrimaryStru
     return extra.length > 0 ? [...detailAtoms, ...extra] : detailAtoms
   }, [viewMode, atoms, detailAtoms, selectedAtomIds])
 
+  const hyperStickBondedIds = useMemo(
+    () => viewMode === 'hyper-stick' && effectiveShowBonds && effectiveShowBonds
+      ? hyperStickBondedAtomIds(atoms, bonds)
+      : new Set<string>(),
+    [viewMode, effectiveShowBonds, effectiveShowBonds, atoms, bonds],
+  )
+  const hyperStickBatches = useMemo(() => {
+    if (viewMode !== 'hyper-stick') return { bonded: [], isolated: [] }
+    const batchAtoms = useFocusFastMode ? fastAtoms : instancedAtoms
+    return {
+      bonded: batchAtoms.filter((atom) => hyperStickBondedIds.has(atom.id)),
+      isolated: batchAtoms.filter((atom) => !hyperStickBondedIds.has(atom.id)),
+    }
+  }, [viewMode, useFocusFastMode, fastAtoms, instancedAtoms, hyperStickBondedIds])
+
   const { detailBonds, fastBonds } = useMemo(() => {
     const detailAtomIds = new Set(detailAtoms.map((atom) => atom.id))
     const fastAtomIds = new Set(fastAtoms.map((atom) => atom.id))
@@ -549,6 +564,37 @@ export function CrystalScene({ hidePrimaryStructure = false }: { hidePrimaryStru
       }),
     [adaptivePerformanceEnabled, atoms.length, transientAdaptiveLevel],
   )
+
+  // Bond surfaces only cover bonded endpoints. Keep isolated atoms visible in
+  // every ordinary, instanced, and focus rendering path.
+  const hyperStickGeometry = viewMode === 'hyper-stick' && <>
+    {effectiveShowBonds && <group visible={effectiveShowBonds}>
+      <HyperStickBonds atoms={atoms} bonds={bonds} atomScale={atomScale} renderOverride={hyperStickBaseOverride} />
+    </group>}
+    {(useInstancedRendering || useSolidBoxRendering || useFocusFastMode) && <>
+      {hyperStickBatches.bonded.length > 0 && <InstancedAtoms
+        atoms={hyperStickBatches.bonded}
+        hiddenAtomIds={polyhedronLigandAtomIds}
+        viewMode="hyper-stick"
+        scale={1}
+        radialSegments={atomQualityProfile.instancedRadialSegments}
+        renderOverride={hyperStickPickOverride}
+      />}
+      {hyperStickBatches.isolated.length > 0 && <InstancedAtoms
+        atoms={hyperStickBatches.isolated}
+        hiddenAtomIds={polyhedronLigandAtomIds}
+        viewMode="ball-stick"
+        scale={1}
+        radialSegments={atomQualityProfile.instancedRadialSegments}
+        renderOverride={hyperStickBaseOverride}
+      />}
+    </>}
+    {(useInstancedRendering || useSolidBoxRendering || useFocusFastMode ? hyperStickMeshAtoms : atoms).map((atom) => (
+      <AtomMesh key={atom.id} atom={atom}
+        viewMode={hyperStickBondedIds.has(atom.id) ? 'hyper-stick' : 'ball-stick'}
+        scale={1} hiddenAtomIds={polyhedronLigandAtomIds} renderOverride={hyperStickBaseOverride} />
+    ))}
+  </>
 
   // Compact mode: render the typed-array bulk via sphere impostors (one draw call,
   // no Atom[] pipeline) + the materialized focus patch via the existing detail path.
@@ -746,24 +792,7 @@ export function CrystalScene({ hidePrimaryStructure = false }: { hidePrimaryStru
           <meshBasicMaterial color="#FFD700" wireframe transparent opacity={0.5} depthWrite={false} />
         </mesh>
 
-        {viewMode === 'hyper-stick' && (
-          <>
-            <HyperStickBonds atoms={atoms} bonds={bonds} atomScale={atomScale} renderOverride={hyperStickBaseOverride} />
-            {instancedAtoms.length > 0 && (
-              <InstancedAtoms
-                atoms={instancedAtoms}
-                hiddenAtomIds={polyhedronLigandAtomIds}
-                viewMode={viewMode}
-                scale={atomScale}
-                radialSegments={atomQualityProfile.instancedRadialSegments}
-                renderOverride={hyperStickPickOverride}
-              />
-            )}
-            {hyperStickMeshAtoms.map((atom) => (
-              <AtomMesh key={atom.id} atom={atom} viewMode={viewMode} scale={atomScale} hiddenAtomIds={polyhedronLigandAtomIds} renderOverride={hyperStickBaseOverride} />
-            ))}
-          </>
-        )}
+        {hyperStickGeometry}
 
         {viewMode !== 'hyper-stick' && fastAtoms.length > 0 && (
           <InstancedAtoms
@@ -832,14 +861,7 @@ export function CrystalScene({ hidePrimaryStructure = false }: { hidePrimaryStru
         <LatticeGrid latticeVectors={latticeVectors} supercell={supercellParams} visible={effectiveShowLattice} />
 
         <group visible={!hidePrimaryStructure}>
-        {viewMode === 'hyper-stick' && (
-          <>
-            <HyperStickBonds atoms={atoms} bonds={bonds} atomScale={atomScale} renderOverride={hyperStickBaseOverride} />
-            {detailAtoms.map((atom) => (
-              <AtomMesh key={atom.id} atom={atom} viewMode={viewMode} scale={atomScale} hiddenAtomIds={polyhedronLigandAtomIds} renderOverride={hyperStickBaseOverride} />
-            ))}
-          </>
-        )}
+        {hyperStickGeometry}
 
         {viewMode !== 'hyper-stick' && atoms.length > 0 && (
           <InstancedAtoms
@@ -916,32 +938,7 @@ export function CrystalScene({ hidePrimaryStructure = false }: { hidePrimaryStru
       {normalRegionSource && <RegionSolids source={normalRegionSource} />}
 
       <group visible={!hidePrimaryStructure}>
-      {!normalRegionOnlyView && viewMode === 'hyper-stick' && (
-        <>
-          <HyperStickBonds atoms={atoms} bonds={bonds} atomScale={atomScale} renderOverride={hyperStickBaseOverride} />
-          {useInstancedRendering ? (
-            <>
-              {instancedAtoms.length > 0 && (
-                <InstancedAtoms
-                  atoms={instancedAtoms}
-                  hiddenAtomIds={polyhedronLigandAtomIds}
-                  viewMode={viewMode}
-                  scale={atomScale}
-                  radialSegments={atomQualityProfile.instancedRadialSegments}
-                  renderOverride={hyperStickPickOverride}
-                />
-              )}
-              {hyperStickMeshAtoms.map((atom) => (
-                <AtomMesh key={atom.id} atom={atom} viewMode={viewMode} scale={atomScale} hiddenAtomIds={polyhedronLigandAtomIds} renderOverride={hyperStickBaseOverride} />
-              ))}
-            </>
-          ) : (
-            atoms.map((atom) => (
-              <AtomMesh key={atom.id} atom={atom} viewMode={viewMode} scale={atomScale} hiddenAtomIds={polyhedronLigandAtomIds} renderOverride={hyperStickBaseOverride} />
-            ))
-          )}
-        </>
-      )}
+      {!normalRegionOnlyView && hyperStickGeometry}
 
       {!normalRegionOnlyView && viewMode !== 'hyper-stick' && (
         useInstancedRendering ? (

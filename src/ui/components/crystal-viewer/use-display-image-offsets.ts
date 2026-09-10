@@ -152,7 +152,8 @@ function compute({
         if (a.id !== draggingAtomId) return a.displayImage
         const cart = a.cartesian ?? a.position
         if (!cart) return a.displayImage
-        const { image } = splitIntoCellImage(cart as Vec3, latticeVectors, periodicDirs)
+        const { image: boxImage } = splitIntoCellImage(cart as Vec3, displayBox, periodicDirs)
+        const image: ImageIndex = [boxImage[0] * nx, boxImage[1] * ny, boxImage[2] * nz]
         return isOriginImage(image) ? undefined : image
       })
     : EMPTY_IMAGES

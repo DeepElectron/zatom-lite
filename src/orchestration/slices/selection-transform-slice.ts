@@ -18,7 +18,21 @@ import * as THREE from 'three'
 import type { StateCreator } from 'zustand'
 import type { CrystalStore, SelectionRegionPreview } from '../crystal-store-types'
 import { computeSelectionTransformOrigin, isNonZeroVector, type SelectionTransformMode } from '../../lib/selection-transform-preview'
+import { bondsAfterPlacement, hasExplicitTopology } from './lattice-supercell-slice'
+import { displayPositionOf } from '../../lib/crystal/cell-overflow'
+import { cartesianToFractional } from '../../lib/crystal/lattice'
+import { scaleLatticeVectorsForSupercell } from '../../lib/crystal/supercell-utils'
 import { recomputeBonds } from '../recompute-bonds'
+
+function transformedBonds(state: CrystalStore, atoms: CrystalStore['atoms']) {
+  if (!hasExplicitTopology(state)) return recomputeBonds(state, { atoms })
+  const box = scaleLatticeVectorsForSupercell(state.latticeVectors, state.supercellParams)
+  const shown = state.atoms.map(atom => state.selectedAtomIds.has(atom.id) && state.cellOverflowMode === 'tile-images'
+    ? { ...atom, cartesian: displayPositionOf(atom.cartesian ?? atom.position, atom.displayImage, state.latticeVectors) }
+    : atom)
+  const bonds = bondsAfterPlacement(state, shown, state.latticeVectors, box)
+  return bondsAfterPlacement({ ...state, atoms: shown, bonds }, atoms, state.latticeVectors)
+}
 
 export interface SelectionTransformSlice {
   selectionRegionPreview: SelectionRegionPreview | null
@@ -73,11 +87,12 @@ export const createSelectionTransformSlice: StateCreator<CrystalStore, [], [], S
     const [dx, dy, dz] = translationPreview
     const updatedAtoms = atoms.map(a => {
       if (!selectedAtomIds.has(a.id)) return a
-      const pos = a.cartesian || a.position
+      const state = get()
+      const pos = displayPositionOf(a.cartesian ?? a.position, state.cellOverflowMode === 'tile-images' ? a.displayImage : undefined, state.latticeVectors)
       return {
         ...a,
         cartesian: [pos[0] + dx, pos[1] + dy, pos[2] + dz] as [number, number, number],
-        position: [a.position[0] + dx, a.position[1] + dy, a.position[2] + dz] as [number, number, number],
+        position: state.periodic ? cartesianToFractional([pos[0] + dx, pos[1] + dy, pos[2] + dz], scaleLatticeVectorsForSupercell(state.latticeVectors, state.supercellParams)) : [pos[0] + dx, pos[1] + dy, pos[2] + dz] as [number, number, number],
       }
     })
     const updatedOrigin = selectionTransformOrigin
@@ -87,14 +102,11 @@ export const createSelectionTransformSlice: StateCreator<CrystalStore, [], [], S
           selectionTransformOrigin[2] + dz,
         ] as [number, number, number]
       : selectionTransformOrigin
-    set({ atoms: updatedAtoms, translationPreview: null, rotationPreview: null, selectionTransformOrigin: updatedOrigin })
+    set({ atoms: updatedAtoms, bonds: transformedBonds(get(), updatedAtoms), translationPreview: null, rotationPreview: null, selectionTransformOrigin: updatedOrigin })
     get().syncBiomoleculeCoordinates(updatedAtoms)
-    // Match merge placement: wrap periodic axes and extend non-periodic axes in one history transaction.
+
     get().applyBoundaryToAtoms(selectedAtomIds)
-    // Refresh distance-based bond topology after geometry changes; otherwise moved selections
-    // retain invalid long bonds across the cell. Centralizing this here covers gizmo, Ctrl drag,
-    // translation panel, and whole-selection drag. Skip explicit PDB topology.
-    if (!get().bioStructure) set({ bonds: recomputeBonds(get()) })
+
   },
 
   applyRotationPreview: () => {
@@ -114,7 +126,9 @@ export const createSelectionTransformSlice: StateCreator<CrystalStore, [], [], S
     const updatedAtoms = atoms.map((atom) => {
       if (!selectedAtomIds.has(atom.id) || !atom.cartesian) return atom
 
-      const transformed = new THREE.Vector3(atom.cartesian[0], atom.cartesian[1], atom.cartesian[2])
+      const state = get()
+      const shown = displayPositionOf(atom.cartesian, state.cellOverflowMode === 'tile-images' ? atom.displayImage : undefined, state.latticeVectors)
+      const transformed = new THREE.Vector3(...shown)
       transformed.sub(pivot)
       transformed.applyEuler(rotation)
       transformed.add(pivot)
@@ -122,12 +136,13 @@ export const createSelectionTransformSlice: StateCreator<CrystalStore, [], [], S
       return {
         ...atom,
         cartesian: [transformed.x, transformed.y, transformed.z] as [number, number, number],
-        position: [transformed.x, transformed.y, transformed.z] as [number, number, number],
+        position: state.periodic ? cartesianToFractional([transformed.x, transformed.y, transformed.z], scaleLatticeVectorsForSupercell(state.latticeVectors, state.supercellParams)) : [transformed.x, transformed.y, transformed.z] as [number, number, number],
       }
     })
 
     set({
       atoms: updatedAtoms,
+      bonds: transformedBonds(get(), updatedAtoms),
       rotationPreview: null,
       translationPreview: null,
       selectionTransformOrigin: origin,
@@ -137,7 +152,5 @@ export const createSelectionTransformSlice: StateCreator<CrystalStore, [], [], S
     // tile-images displayImage offsets do not become stale and shift copies outside the tiled region.
     // Keep this in the same history transaction.
     get().applyBoundaryToAtoms(selectedAtomIds)
-    // As for translation, recompute distance-based bonds after geometry changes; skip explicit PDB topology.
-    if (!get().bioStructure) set({ bonds: recomputeBonds(get()) })
   },
 })

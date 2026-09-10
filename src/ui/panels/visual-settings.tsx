@@ -27,8 +27,6 @@ export function VisualSettings() {
   const compactStructure = useCrystalStore((state) => state.compactStructure)
   const appearance = useThemeStore((state) => state.appearance)
   const setAppearance = useThemeStore((state) => state.setAppearance)
-  const cellColor = useCrystalStore((state) => state.cellColor)
-  const setCrystalVisualSettings = useCrystalStore((state) => state.setCrystalVisualSettings)
   const showBonds = useCrystalStore((state) => state.showBonds)
   const wholeMolecules = useCrystalStore((state) => state.wholeMolecules)
   const setWholeMolecules = useCrystalStore((state) => state.setWholeMolecules)
@@ -117,7 +115,7 @@ export function VisualSettings() {
       {!bioStructure && <section className={periodic ? 'border-t border-[var(--glass-border-subtle)] pt-4' : undefined} aria-labelledby="visual-representation-heading">
         <div id="visual-representation-heading" style={{ fontSize: 13, color: 'var(--panel-text)', marginBottom: 10 }}>Representation</div>
         <IconSegmented
-          columns={5}
+          columns={2}
           options={VIEW_MODES.filter((mode) => !compactStructure || mode.value !== 'stick').map((mode) => ({ label: mode.label, icon: mode.icon }))}
           value={VIEW_MODES.find((mode) => mode.value === viewMode)?.label ?? 'Ball & Stick'}
           onChange={(label) => {
@@ -202,7 +200,7 @@ export function VisualSettings() {
           )}
         </div>}
         <label className="flex cursor-pointer items-center justify-between" title="Draws periodic image atoms at cell boundaries (an FCC conventional cell shows 4 atoms as 14 spheres); clicking an image selects its source atom and coordinates are unchanged">
-          <span className="text-[13px]" style={{ color: 'var(--panel-text)' }}>Periodic images</span>
+          <span className="text-[13px]" style={{ color: 'var(--panel-text)' }}>Periodic images (faint copies)</span>
           <Toggle checked={showPeriodicImages} onChange={(value) => { setShowPeriodicImages(value);  }} />
         </label>
         <label className="flex cursor-pointer items-center justify-between">
@@ -309,16 +307,16 @@ export function VisualSettings() {
       <section className="space-y-3 border-t border-[var(--glass-border-subtle)] pt-4" aria-labelledby="visual-appearance-heading">
         <div id="visual-appearance-heading" style={{ fontSize: 13, color: 'var(--panel-text)' }}>Appearance</div>
         <Segmented
-          options={['Auto', 'System', 'Light', 'Dark']}
+          options={['System', 'Light', 'Dark', 'Viewport']}
           value={
-            appearance === 'viewport' ? 'Auto'
+            appearance === 'viewport' ? 'Viewport'
               : appearance === 'system' ? 'System'
                 : appearance === 'dark' ? 'Dark'
                   : 'Light'
           }
           ariaLabel="Interface appearance"
           onChange={(value) => {
-            const next = value === 'Auto' ? 'viewport'
+            const next = value === 'Viewport' ? 'viewport'
               : value === 'System' ? 'system'
                 : value === 'Dark' ? 'dark'
                   : 'light'
@@ -327,14 +325,7 @@ export function VisualSettings() {
             // A fixed Light or Dark override also updates the scientific viewport background.
             // Flip default cell-line colors when needed to preserve contrast.
             // Auto and System affect interface chrome without changing the scientific viewport.
-            if (next === 'light' || next === 'dark') {
-              const dark = next === 'dark'
-              const cellColorPatch =
-                dark && cellColor === '#000000' ? { cellColor: '#e6e6ea' }
-                : !dark && cellColor === '#e6e6ea' ? { cellColor: '#000000' }
-                : {}
-              setCrystalVisualSettings({ background: dark ? '#101014' : '#ffffff', ...cellColorPatch })
-            }
+
           }}
         />
         <p className="text-[10px] leading-4" style={{ color: 'var(--panel-text-secondary)' }}>

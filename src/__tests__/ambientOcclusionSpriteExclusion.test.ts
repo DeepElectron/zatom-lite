@@ -9,11 +9,11 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { Mesh, Points, Scene, Sprite } from 'three'
+import { Mesh, MeshNormalMaterial, Points, Scene, Sprite } from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
-import { excludeNonSurfacesFromOcclusion } from '../ui/components/crystal-viewer/ambient-occlusion-pass'
+import { excludeNonSurfacesFromOcclusion, withOcclusionMaterials } from '../ui/components/crystal-viewer/ambient-occlusion-pass'
 
 function fatLine(): Line2 {
   const geometry = new LineGeometry()
@@ -95,5 +95,26 @@ describe('GTAO 预渲染只让真实曲面参与遮蔽', () => {
 
     // Restore only objects that were visible before the prepass.
     expect(line.visible).toBe(false)
+  })
+})
+
+
+describe('procedural occlusion surfaces', () => {
+  it('uses surface normals instead of proxy geometry and restores materials after errors', () => {
+    const scene = new Scene()
+    const mesh = new Mesh()
+    const original = mesh.material
+    const procedural = new MeshNormalMaterial()
+    const override = new MeshNormalMaterial()
+    mesh.userData.occlusionNormalMaterial = procedural
+    scene.add(mesh)
+    scene.overrideMaterial = override
+    expect(() => withOcclusionMaterials(scene, override, () => {
+      expect(mesh.material).toBe(procedural)
+      expect(scene.overrideMaterial).toBeNull()
+      throw new Error('render interrupted')
+    })).toThrow('render interrupted')
+    expect(mesh.material).toBe(original)
+    expect(scene.overrideMaterial).toBe(override)
   })
 })

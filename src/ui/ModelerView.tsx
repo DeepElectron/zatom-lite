@@ -105,11 +105,11 @@ export function ModelerView({
   // Tell viewport overlays how much space the inspector occupies.
   useLayoutEffect(() => {
     const root = document.documentElement
-    root.style.setProperty('--viewport-chrome-right', `${inspectorWidth + 12}px`)
+    root.style.setProperty('--viewport-chrome-right', `${multiViewport ? 0 : inspectorWidth + 12}px`)
     return () => {
       root.style.removeProperty('--viewport-chrome-right')
     }
-  }, [inspectorWidth])
+  }, [inspectorWidth, multiViewport])
 
   useLayoutEffect(() => {
     const documentRoot = document.documentElement

@@ -1,8 +1,7 @@
 // Canonical behavior when an atom crosses a cell boundary:
-// - `grow-cell` preserves Cartesian coordinates and expands the cell.
 // - `tile-images` stores wrapped coordinates but displays the dragged image.
 // - `fold-in` stores and displays the wrapped position.
-// The latter two represent the same periodic structure; only presentation differs.
+// Both represent the same periodic structure; only presentation differs.
 
 import {
   FULLY_PERIODIC,
@@ -15,23 +14,22 @@ import {
   type PeriodicMask,
   type Vec3,
 } from './lattice-math'
-import type { BoundaryOverflowMode } from './merge-boundary'
 
-export type CellOverflowMode = 'grow-cell' | 'tile-images' | 'fold-in'
+export type CellOverflowMode = 'tile-images' | 'fold-in'
 
-export const CELL_OVERFLOW_MODES: readonly CellOverflowMode[] = ['grow-cell', 'tile-images', 'fold-in']
+export const CELL_OVERFLOW_MODES: readonly CellOverflowMode[] = ['tile-images', 'fold-in']
 
 export function isCellOverflowMode(value: unknown): value is CellOverflowMode {
   return typeof value === 'string' && (CELL_OVERFLOW_MODES as readonly string[]).includes(value)
 }
 
-/** Return whether committed coordinates are wrapped into the canonical cell. */
-export function boundaryModeFor(mode: CellOverflowMode): BoundaryOverflowMode {
-  return mode === 'grow-cell' ? 'extend' : 'wrap'
-}
 
-/** Integer cell offset of the displayed periodic image. */
 export type ImageIndex = [number, number, number]
+
+/** Ignore roundoff at exact cell faces when assigning periodic images. */
+export function cellImageIndex(f: number): number {
+  return Math.abs(f - Math.round(f)) < 1e-10 ? Math.round(f) : Math.floor(f)
+}
 
 export const ORIGIN_IMAGE: ImageIndex = [0, 0, 0]
 
@@ -60,11 +58,11 @@ export function splitIntoCellImage(
     return { wrapped: position, image: [...ORIGIN_IMAGE] as ImageIndex }
   }
 
-  const na = periodicMask.a ? Math.floor(fa) : 0
-  const nb = periodicMask.b ? Math.floor(fb) : 0
-  const nc = periodicMask.c ? Math.floor(fc) : 0
+  const na = periodicMask.a ? cellImageIndex(fa) : 0
+  const nb = periodicMask.b ? cellImageIndex(fb) : 0
+  const nc = periodicMask.c ? cellImageIndex(fc) : 0
   if (na === 0 && nb === 0 && nc === 0) {
-    // Already in the cell: Return as is to avoid floating-point round-trips introducing 1e-16 level jitter to atoms in the cell.
+
     return { wrapped: position, image: [...ORIGIN_IMAGE] as ImageIndex }
   }
 

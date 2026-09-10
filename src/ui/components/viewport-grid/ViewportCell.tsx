@@ -69,7 +69,8 @@ export function ViewportCell({ slot, isSingle, children, cornerRadius, revealCon
     () => crystalSlotHasWorkspace(slot),
     () => crystalSlotHasWorkspace(slot),
   )
-  const isDark = viewportBackground
+  const appearance = useThemeStore(s => s.appearance)
+  const isDark = appearance === 'viewport' && viewportBackground
     ? resolveViewportTheme(viewportBackground) === 'dark'
     : chromeIsDark
   const structureName = slot.kind === 'crystal' ? slot.structureName : null

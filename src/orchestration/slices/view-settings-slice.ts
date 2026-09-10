@@ -26,7 +26,10 @@ import type {
   ViewMode,
 } from '../../lib/crystal/types'
 import type { BondAnnotation, BondToolSubmode, CrystalStore } from '../crystal-store-types'
-import { isCellOverflowMode, type CellOverflowMode } from '../../lib/crystal/cell-overflow'
+import { cartesianToFractional } from '../../lib/crystal/lattice'
+import { bondsAfterPlacement } from './lattice-supercell-slice'
+import { scaleLatticeVectorsForSupercell } from '../../lib/crystal/supercell-utils'
+import { displayPositionOf, isCellOverflowMode, type CellOverflowMode } from '../../lib/crystal/cell-overflow'
 
 /**
  * Modeler mouse preset defining OrbitControls.mouseButtons for LMB/MMB/RMB.
@@ -73,14 +76,14 @@ function saveCameraPresetToStorage(preset: CameraControlPreset): void {
 }
 
 function loadCameraProjectionFromStorage(): CameraProjection {
-  if (typeof window === 'undefined') return 'perspective'
+  if (typeof window === 'undefined') return 'orthographic'
   try {
     const raw = window.localStorage.getItem(CAMERA_PROJECTION_STORAGE_KEY)
     if (raw === 'perspective' || raw === 'orthographic') return raw
   } catch {
     /* Fall back to the default when localStorage is unavailable in private mode or SSR. */
   }
-  return 'perspective'
+  return 'orthographic'
 }
 
 function saveCameraProjectionToStorage(projection: CameraProjection): void {
@@ -586,16 +589,27 @@ export const createViewSettingsSlice: StateCreator<CrystalStore, [], [], ViewSet
   },
   setCellOverflowMode: (mode) => {
     saveCellOverflowModeToStorage(mode)
-    // Clear displayImage when leaving `tile-images`; it is meaningful only while
-    // images are tiled. Otherwise fold-in can leave atoms visibly outside the cell,
-    // while grow-cell can apply a second offset on top of real coordinates.
-    if (mode !== 'tile-images') {
-      const atoms = get().atoms
-      if (atoms.some((a) => a.displayImage)) {
-        set({ atoms: atoms.map((a) => (a.displayImage ? { ...a, displayImage: undefined } : a)) })
-      }
+    const state = get()
+    if (!state.periodic || !state.atoms.length) {
+      set({ cellOverflowMode: mode })
+      return
     }
-    set({ cellOverflowMode: mode })
+    // Apply the chosen rule to imported coordinates too, not only the next drag.
+    // Resolve the visible image before clearing it, then apply the selected
+    // representation without changing any lattice vector.
+    state.pushHistory()
+    const atoms = state.atoms.map(atom => {
+      const position = displayPositionOf(
+        (atom.cartesian ?? atom.position) as [number, number, number],
+        state.cellOverflowMode === 'tile-images' ? atom.displayImage : undefined,
+        state.latticeVectors,
+      )
+      return { ...atom, cartesian: position, position: cartesianToFractional(position, scaleLatticeVectorsForSupercell(state.latticeVectors, state.supercellParams)), displayImage: undefined }
+    })
+    const bonds = bondsAfterPlacement(state, atoms, state.latticeVectors,
+      scaleLatticeVectorsForSupercell(state.latticeVectors, state.supercellParams))
+    set({ cellOverflowMode: mode, atoms, bonds })
+    get().applyBoundaryToAtoms(atoms.map(atom => atom.id))
   },
   setWholeMolecules: (enabled) => {
     saveWholeMoleculesToStorage(enabled)
